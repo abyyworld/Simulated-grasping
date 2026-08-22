@@ -58,9 +58,8 @@ def make_gif(args) -> None:
 def make_figure(args) -> None:
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
     import cv2
+    import matplotlib.pyplot as plt
 
     from simgrasp.camera import project_points
     from simgrasp.env import PandaGraspEnv
