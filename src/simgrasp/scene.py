@@ -164,6 +164,24 @@ def _find_body(root: ET.Element, name: str) -> ET.Element:
     raise KeyError(f"body {name!r} not found in MJCF")
 
 
+def look_at_xyaxes(pos, target, up=(0.0, 0.0, 1.0)) -> str:
+    """MJCF ``xyaxes`` for a camera at ``pos`` looking at ``target``.
+
+    MuJoCo cameras look along their own -z, and ``xyaxes`` gives the camera's x
+    (image right) and y (image up) axes in world coordinates. Deriving them from
+    a look-at point is far less error-prone than writing six direction cosines by
+    hand, and it makes the intent of the framing readable.
+    """
+    pos = np.asarray(pos, dtype=np.float64)
+    forward = np.asarray(target, dtype=np.float64) - pos
+    forward /= np.linalg.norm(forward)
+    z_cam = -forward
+    x_cam = np.cross(np.asarray(up, dtype=np.float64), z_cam)
+    x_cam /= np.linalg.norm(x_cam)
+    y_cam = np.cross(z_cam, x_cam)
+    return _fmt(np.concatenate([x_cam, y_cam]))
+
+
 def yaw_to_quat(yaw: float) -> np.ndarray:
     return np.array([np.cos(yaw / 2.0), 0.0, 0.0, np.sin(yaw / 2.0)])
 
@@ -221,8 +239,12 @@ def _add_worldbody(root: ET.Element, opts: SceneOptions) -> ET.Element:
     ET.SubElement(world, "camera", name=OVERHEAD_CAM, mode="fixed",
                   pos=f"{CAMERA_X} 0 {cam_z:.6g}", xyaxes="1 0 0 0 1 0",
                   fovy=f"{opts.camera_fovy_deg:.6g}")
+    # Third-person view used for demo videos: framed on the workspace with the
+    # whole arm in shot.
+    scene_pos = (1.24, -0.98, 1.06)
     ET.SubElement(world, "camera", name=SCENE_CAM, mode="fixed",
-                  pos="1.32 -0.98 1.12", xyaxes="0.595 0.804 0 -0.333 0.246 0.910", fovy="45")
+                  pos=_fmt(scene_pos),
+                  xyaxes=look_at_xyaxes(scene_pos, (0.42, 0.0, 0.62)), fovy="43")
     return world
 
 
