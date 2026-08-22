@@ -57,9 +57,13 @@ check:
 baseline:
 	$(PY) scripts/run_baseline.py --episodes $(TRIALS) --workers $(WORKERS)
 
+# ANGLES>1 executes that many grasps per scene at different orientations, which
+# is what gives the network contrastive evidence about angle.
+ANGLES ?= 1
+
 dataset:
 	$(PY) scripts/collect_dataset.py --episodes $(EPISODES) --workers $(WORKERS) \
-		--split seen --out $(DATA)
+		--split seen --angles-per-scene $(ANGLES) --out $(DATA)
 
 train:
 	$(PY) scripts/train.py --data $(DATA) --out $(RUN)

@@ -220,8 +220,22 @@ It matters, too. Sweeping the executed grasp angle away from the oracle:
 The cylinder row is the control: a rotationally symmetric object should be flat,
 and is.
 
-**Rotation augmentation** was added to attack this (§10). It helped, but did not
-solve it.
+Two fixes were tried, in order.
+
+**Rotation augmentation** (§9) attacks it indirectly: rotating a training image
+and carrying the label with it multiplies angle coverage. It improved quality
+prediction and helped on the most elongated category, but did not fix orientation
+overall.
+
+**Several grasp angles per scene** attacks it directly. `--angles-per-scene K`
+executes K grasps at the *same point* in the *same settled scene* at orientations
+spread over the half turn, restoring the simulator state between them. Measured
+on the collected set, the outcome differs across angles in roughly half of all
+scenes — and those are precisely the samples that a function of the pixel alone
+cannot fit, which is what forces the network off the marginal-probability
+solution. It is also cheap, because the settle and the render are shared rather
+than repeated: 14 978 samples took 21 minutes against 25 for 10 000 single-grasp
+episodes.
 
 ### Free negatives
 

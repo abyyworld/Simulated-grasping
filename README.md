@@ -43,6 +43,7 @@ Then, in order:
 ```bash
 make baseline      # scripted-grasp success over 200 trials      (~2 min, 4 workers)
 make dataset       # 10 000 episodes -> data/grasp10k (~2.5 GB)  (~30 min, 4 workers)
+                   #   add ANGLES=3 for contrastive orientation labels
 make train         # train the grasp network -> runs/grasp_cnn
 make evaluate      # seen vs held-out success for every policy
 make media         # README GIF + prediction figure
@@ -214,6 +215,13 @@ are as informative as successes, which is why quality is *classified* per angle
 bin rather than regressed — a failed grasp is a clean negative for exactly the
 cell that was tried. Table pixels far from any object are additionally labelled
 as certain failures for free, mined from the height map.
+
+With `--angles-per-scene K` the collector executes K grasps at the **same point**
+in the same settled scene, at orientations spread over the half turn, restoring
+simulator state between them. This matters more than it sounds: with one label
+per image, every label is explainable by a function of the pixel alone, so the
+network learns *where* to grasp and ignores *how* to orient — measured, and
+written up in [docs/design.md §6](docs/design.md).
 
 **Baselines.** The *oracle* grasps using the object's true pose — the ceiling a
 perfect perception system could reach with this controller. The *heuristic* uses
