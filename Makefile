@@ -1,10 +1,21 @@
 # Simulated grasping - common workflows.
 # Every target is safe to run from a fresh clone in this order.
 
-PYTHON ?= python3
-VENV   ?= .venv
-PY     := $(VENV)/bin/python
-PIP    := $(VENV)/bin/pip
+# Windows (including Git Bash / MSYS) puts venv executables in Scripts\, not bin/.
+ifeq ($(OS),Windows_NT)
+  PYTHON  ?= python
+  VENVBIN := Scripts
+  EXE     := .exe
+else
+  PYTHON  ?= python3
+  VENVBIN := bin
+  EXE     :=
+endif
+
+VENV ?= .venv
+PY   := $(VENV)/$(VENVBIN)/python$(EXE)
+PIP  := $(VENV)/$(VENVBIN)/pip$(EXE)
+RUFF := $(VENV)/$(VENVBIN)/ruff$(EXE)
 
 WORKERS  ?= 4
 EPISODES ?= 10000
@@ -61,7 +72,7 @@ test:
 	$(PY) -m pytest tests/ -q
 
 lint:
-	$(VENV)/bin/ruff check src scripts tests
+	$(RUFF) check src scripts tests
 
 # The whole project, end to end. Hours, not minutes.
 all: install assets check baseline dataset train evaluate media

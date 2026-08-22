@@ -44,12 +44,42 @@ Every target takes `WORKERS=`, `EPISODES=`, `DATA=`, `RUN=`.
 
 ### Platform notes
 
-Runs on Linux and macOS, CUDA / Apple MPS / CPU. The render backend and torch
-device are auto-detected: macOS uses CGL, Linux prefers EGL and falls back to
-OSMesa software rendering.
+Runs on **Linux, macOS and Windows**, on CUDA / Apple MPS / CPU. Both the render
+backend and the torch device are detected automatically, so the commands above
+are the same everywhere.
 
-On Apple Silicon everything works, including training on `mps`. The one thing
-that needs a Linux + NVIDIA box is the Isaac Lab port (see [Roadmap](#roadmap)).
+| platform | rendering | notes |
+|---|---|---|
+| Windows | WGL | use `make` from Git Bash, or run the `scripts/*.py` directly |
+| macOS (Intel or Apple Silicon) | CGL | trains on `mps`; the interactive viewer needs `mjpython scripts/view_scene.py` |
+| Linux with a desktop | GLX | |
+| Linux headless / CI | EGL, else OSMesa | probed by rendering a real frame, because cloud images ship `libEGL.so` with no driver behind it |
+
+The detected backend is cached in `.simgrasp_gl_backend`; delete that file to
+re-probe (after installing a GPU driver, say), or set `MUJOCO_GL` yourself to
+override. On headless Linux with neither backend installed:
+
+```bash
+sudo apt-get install -y libosmesa6      # software, works anywhere
+sudo apt-get install -y libegl1         # hardware, needs a GPU driver
+```
+
+**Without `make`** (any OS) every step is a plain script:
+
+```bash
+python -m venv .venv
+.venv/bin/pip install -e ".[dev]"          # Windows: .venv\Scripts\pip
+python scripts/fetch_assets.py
+python scripts/check_install.py
+python scripts/run_baseline.py --episodes 200 --workers 4
+python scripts/collect_dataset.py --episodes 10000 --workers 4 --split seen --out data/grasp10k
+python scripts/train.py --data data/grasp10k --out runs/grasp_cnn
+python scripts/evaluate.py --checkpoint runs/grasp_cnn/best.pt
+```
+
+Everything in Project 1 runs on an M-series MacBook, including training. The one
+thing that genuinely requires a Linux + NVIDIA box is the Isaac Lab port
+(see [Roadmap](#roadmap)).
 
 ---
 

@@ -137,13 +137,26 @@ class RGBDCamera:
         return camera_pose(data, self.model, self.camera)
 
     def close(self) -> None:
-        self._renderer.close()
+        """Release the renderer. Safe to call more than once."""
+        renderer, self._renderer = getattr(self, "_renderer", None), None
+        if renderer is not None:
+            renderer.close()
 
     def __enter__(self) -> RGBDCamera:
         return self
 
     def __exit__(self, *exc) -> None:
         self.close()
+
+    def __del__(self) -> None:
+        # Without this, a camera that goes out of scope without close() is
+        # collected after its GL context has already been torn down, and the
+        # EGL backend prints an "Exception ignored in __del__" traceback that
+        # looks alarming but means nothing.
+        try:
+            self.close()
+        except Exception:  # noqa: BLE001 - interpreter shutdown, nothing to do
+            pass
 
 
 def height_map(depth: np.ndarray, cam_pos: np.ndarray, cam_mat: np.ndarray, intr: CameraIntrinsics,
