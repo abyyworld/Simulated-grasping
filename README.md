@@ -17,12 +17,13 @@ on convex primitives (box, cylinder, capsule, sphere) and is evaluated on shapes
 that share no topology with them (ellipsoid, L, T, mug, dumbbell).
 
 > **Read the results before the pitch.** In the reference run below the learned
-> policy **loses to a hand-written depth heuristic**, 66.5% against 82.5%. That
-> is the honest state of it, the causes are measured rather than guessed, and
-> they are written up in [Failure analysis](#failure-analysis). The simulation,
-> the data pipeline and the evaluation are solid; the model is the weak part, and
-> the reference checkpoint was trained at half resolution on a laptop CPU because
-> that is the hardware this was built on.
+> policy **loses to a hand-written depth heuristic**, 72.5% against 82.5%. That is
+> the honest state of it. The causes are measured rather than guessed, one of them
+> was diagnosed and then fixed for a +6-point gain, and the whole chain is written
+> up in [Failure analysis](#failure-analysis). The simulation, the data pipeline
+> and the evaluation are solid; the model is the weak part, and the reference
+> checkpoint was trained at half resolution on a laptop CPU because that is the
+> hardware this was built on.
 
 ---
 
@@ -161,7 +162,7 @@ Full tables, regenerated from the run artefacts, in **[docs/results.md](docs/res
 |---|---|---|---|---|
 | Oracle (ground-truth pose) | 95.5% | 79.8% | +15.7 pp | upper bound: perfect perception |
 | Heuristic (depth centroid + PCA) | 88.3% | 75.3% | +13.0 pp | no learning, depth only |
-| **CNN (ours)** | 78.4% | 51.7% | +26.7 pp | one RGB-D image, one forward pass |
+| **CNN (ours)** | 83.8% | 58.4% | +25.4 pp | one RGB-D image, one forward pass |
 
 *n = 200 trials, identical scenes for every policy.*
 
@@ -283,49 +284,57 @@ Measured along the way (see [docs/design.md](docs/design.md)):
 
 ### Why the learned policy loses to the heuristic
 
-66.5% against 82.5%. Four measured causes, in order of how much they matter:
+72.5% against 82.5%. The interesting part is not the gap but what closing part of
+it took.
 
-1. **The angle head is at chance.** Mean error between the predicted grasp angle
-   and the oracle's is **46.5°** over shapes with a determinate grasp axis;
-   random guessing over a half-turn-symmetric gripper scores 45°. This is not a
-   subtlety of the task — sweeping the executed angle away from the oracle drops
-   capsule success from 88% to 12%, so a near-random angle is expensive.
+**The diagnosis.** Grasp *position* was learned well from the start — the
+predicted pixel lands within 1–2 px of the object and quality is ~0 elsewhere.
+Grasp *angle* was not learned at all: mean error against the oracle was 55° on
+seen categories, **worse than the 45° of a random guess**. That is expensive,
+because angle matters: sweeping the executed grasp away from the oracle drops
+capsule success from 88% to 12% at 90°, while a cylinder stays flat at 100% as a
+rotationally symmetric object should.
 
-   The cause is structural. Each episode supervises exactly **one** of twelve
-   angle bins at **one** pixel, so at any object pixel eleven bins never receive
-   a gradient and the loss is minimised by predicting the angle-*marginal*
-   success rate. Half the training categories (cylinder, sphere) are rotationally
-   symmetric and carry no orientation signal at all.
+**The cause was the label density, not the architecture.** Each episode
+supervises exactly **one** of twelve angle bins at **one** pixel. Every label is
+therefore explainable by a function of the pixel alone, and predicting the
+angle-*marginal* success rate is a loss minimum. The network found it.
 
-2. **`closed_empty` dominates its failures** — 53 of 200 trials, against 20 for
-   the oracle and 25 for the heuristic. The gripper arrives somewhere plausible
-   and closes on nothing, which is what a wrong angle or a few millimetres of
-   position error produces.
+**Two fixes, measured:**
 
-3. **The reference checkpoint is under-trained by design.** 12 epochs at
-   112×112 on four CPU cores, no ImageNet initialisation. Half resolution
-   quantises grasp positions to 4.4 mm. On a GPU this should be 30 epochs at
-   224×224 with `--pretrained`; see [Quick start](#quick-start).
+| training data | angle error (seen) | grasp success |
+|---|---|---|
+| one grasp per scene | 55.2° | 66.5% |
+| one grasp per scene + rotation augmentation | 48.6° | – |
+| **three grasps per scene, same point, different angles** | **35.2°** | **72.5%** |
 
-4. **It transferred a shape prior that does not generalise.** The figure above
-   shows it peaking on a dumbbell's end balls instead of the shaft — sensible for
-   the convex blobs it trained on, wrong for a two-part object. Held-out success
-   is 51.7% against 75.3% for the heuristic, so the gap is worst exactly where
-   the project claims to be interesting.
+Rotation augmentation helped a little. What actually worked was making the
+*data* contrastive: executing several grasps at the same point at different
+orientations, so no function of the pixel alone can fit the labels. Angle error
+fell below chance and success rose 6 points.
 
-**What was tried.** Rotation augmentation (rotating training images and carrying
-the grasp label with them) was added specifically to attack cause 1. It improved
-validation AP from 0.807 to 0.822 and cut capsule angle error from 55° to 37°,
-but did **not** fix orientation overall — per-category results are mixed, four
-categories better and three worse. Both runs are kept so the comparison is
-visible rather than asserted: `runs/grasp_cnn_norot` is the ablation.
+**What still holds it back:**
 
-**What would most likely fix it**, roughly in order of expected value: collect
-several grasp angles at the *same* point in each scene, so the data contains
-direct contrastive evidence about orientation rather than one bin per image;
-train at full resolution on a GPU with ImageNet initialisation; and add
+1. **Orientation does not transfer.** Held-out shapes remain at chance (47.2°).
+   The network learned the angle rule for the shapes it saw, not a general
+   "grasp across the narrow axis". Held-out success is 58.4% against the
+   heuristic's 75.3%.
+2. **`closed_empty` still dominates** — 45 of 200 trials against 20–25 for the
+   other policies.
+3. **The checkpoint is under-trained by design**: 12 epochs at 112×112 on four
+   CPU cores with no ImageNet initialisation, because that is the hardware this
+   was built on. Half resolution quantises grasp positions to 4.4 mm. On a GPU it
+   should be 30 epochs at 224×224 with `--pretrained`.
+4. **It transferred a convex-blob prior.** The figure above shows it peaking on a
+   dumbbell's end balls rather than the shaft between them — reasonable for the
+   boxes, cylinders, capsules and spheres it trained on, wrong here. Dumbbell
+   success is its worst category at 22%.
+
+**Next, in order of expected value:** train at full resolution on a GPU with
+ImageNet initialisation; raise the grasps-per-scene count and add
 angle-informative categories to the training split, which is currently half
-rotationally symmetric.
+rotationally symmetric; then test in clutter, where the centroid heuristic should
+degrade far faster than a learned model.
 
 ### Where the oracle still fails
 

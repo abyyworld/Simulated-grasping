@@ -88,32 +88,33 @@ def generalisation_section(results: Path) -> list[str]:
 
 
 def ablation_section(run_dir: Path, ablation_dir: Path) -> list[str]:
-    """Rotation-augmentation ablation: two runs identical but for the augmentation."""
-    main = load(run_dir / "summary.json")
-    abl = load(ablation_dir / "summary.json")
-    if not (main and abl):
-        return []
+    """Three training runs attacking the same failure: the collapsed angle head."""
     angles = load(Path("results") / "angle_ablation.json")
+    if not angles or "runs" not in angles:
+        return []
+    labels = ["one grasp/scene, no rotation", "one grasp/scene + rotation aug",
+              "**three grasps/scene (contrastive)**"]
+    runs = angles["runs"][: len(labels)]
+    if not runs:
+        return []
 
-    lines = ["## Ablation: rotation augmentation", "",
-             "Two runs with identical data, architecture, schedule and seed; the only "
-             "difference is whether training images are randomly rotated (with the grasp "
-             "label carried along).", "",
-             "| | no rotation | with rotation |", "|---|---|---|",
-             f"| best validation AP | {abl['best']['ap']:.3f} | {main['best']['ap']:.3f} |",
-             f"| best epoch | {abl['best']['epoch']} | {main['best']['epoch']} |"]
-    if angles:
-        lines += [
-            f"| mean grasp-angle error, elongated objects | {angles['norot_deg']:.0f}° | "
-            f"**{angles['rot_deg']:.0f}°** |",
-            f"| per-angle quality spread at the chosen pixel | {angles['norot_spread']:.3f} | "
-            f"**{angles['rot_spread']:.3f}** |",
-        ]
-    lines += ["", "Validation AP measures *where* to grasp and is barely affected. The "
-              "angle metrics are the point: without augmentation each episode supervises "
-              "one of twelve angle bins at one pixel, so the network predicts the "
-              "angle-marginal success rate and orientation collapses. Random guessing over "
-              "a half-turn-symmetric grasp scores 45°.", ""]
+    lines = ["## Ablation: teaching the network *orientation*", "",
+             "Grasp position is learned easily; grasp **angle** is not. Each episode "
+             "supervises one of twelve angle bins at one pixel, so predicting the "
+             "angle-marginal success rate is a loss minimum and orientation collapses. "
+             "Three runs attack that, each identical to the last but for one change.", "",
+             "| training data | angle error, seen | angle error, held-out |",
+             "|---|---|---|"]
+    for label, r in zip(labels, runs, strict=False):
+        lines.append(f"| {label} | {r['angle_error_deg_seen']:.1f}° | "
+                     f"{r['angle_error_deg_heldout']:.1f}° |")
+    lines += ["", "Random guessing over a half-turn-symmetric grasp scores **45°**.", "",
+              "Executing several grasps at the *same point* at different orientations is "
+              "the change that works: it makes the labels impossible to explain with a "
+              "function of the pixel alone. Seen-category angle error falls from 55° "
+              "(worse than chance) to 35°. It does **not** transfer — held-out shapes stay "
+              "at chance — so the network learned the orientation rule for the shapes it "
+              "saw rather than a general one.", ""]
     return lines
 
 
