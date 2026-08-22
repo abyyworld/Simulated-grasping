@@ -23,7 +23,7 @@ DATA     ?= data/grasp10k
 RUN      ?= runs/grasp_cnn
 TRIALS   ?= 200
 
-.PHONY: help install assets check baseline dataset train evaluate media test lint clean all
+.PHONY: help install assets check baseline dataset train evaluate media report results test lint clean all
 
 help:
 	@echo "make install    create $(VENV) and install simgrasp (editable)"
@@ -34,6 +34,8 @@ help:
 	@echo "make train      train the grasp network into $(RUN)"
 	@echo "make evaluate   seen vs held-out category success for every policy"
 	@echo "make media      render the README GIF and prediction figure"
+	@echo "make report     regenerate docs/results.md and the README table"
+	@echo "make results    evaluate + figure + report, in one go"
 	@echo "make test       run the test suite"
 	@echo ""
 	@echo "Override any of: WORKERS=$(WORKERS) EPISODES=$(EPISODES) DATA=$(DATA) RUN=$(RUN)"
@@ -67,6 +69,18 @@ evaluate:
 media:
 	$(PY) scripts/make_media.py --gif --episodes 4 --successes-only
 	$(PY) scripts/make_media.py --figure --checkpoint $(RUN)/best.pt
+
+report:
+	$(PY) scripts/make_report.py --run $(RUN)
+
+# Everything that turns a trained checkpoint into published numbers.
+results:
+	$(PY) scripts/run_baseline.py --episodes $(TRIALS) --workers $(WORKERS) \
+		--policies oracle heuristic cnn --checkpoint $(RUN)/best.pt
+	$(PY) scripts/evaluate.py --episodes $(TRIALS) --workers $(WORKERS) \
+		--checkpoint $(RUN)/best.pt
+	$(PY) scripts/make_media.py --figure --checkpoint $(RUN)/best.pt
+	$(PY) scripts/make_report.py --run $(RUN)
 
 test:
 	$(PY) -m pytest tests/ -q
