@@ -253,6 +253,7 @@ scripts/           one CLI per milestone; all take --help
 tests/             pytest suite
 docs/design.md     decisions and the measurements behind them
 docs/results.md    generated results tables
+CLAUDE.md          orientation for anyone (or any AI) picking the project up
 ```
 
 ---
