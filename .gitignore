@@ -31,7 +31,7 @@ outputs/
 MUJOCO_LOG.TXT
 
 # Private notes, never published.
-EXPLAIN-THIS-PROJECT.private.md
+EXPLAIN-THIS-PROJECT.private.*
 .private/
 
 # OS
