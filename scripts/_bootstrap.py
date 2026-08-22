@@ -103,4 +103,33 @@ def choose_gl_backend(verbose: bool = False) -> str:
     )
 
 
-choose_gl_backend()
+def preimport_torch_if_needed(backend: str) -> None:
+    """Import torch before any GL context exists, on software-rendering machines.
+
+    MuJoCo's OSMesa renderer and Triton -- which ships inside the CUDA PyTorch
+    wheel -- each load their own copy of LLVM, and whichever loads second
+    segfaults the process. Reproducible in three lines: render one frame under
+    MUJOCO_GL=osmesa, then `import triton`.
+
+    Importing torch first avoids it. EGL does not clash, so this only runs on the
+    software-rendering fallback, where the ~2 s import is irrelevant next to
+    OSMesa's ~250 ms per frame. Scripts that never touch torch still pay it, which
+    is the right trade against a segfault with no useful traceback.
+    """
+    if backend != "osmesa":
+        return
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        return
+    try:
+        # torch imports triton *lazily* (from torch._dynamo), so importing torch
+        # alone does not settle the LLVM question -- the clash then happens later,
+        # at whatever line first touches dynamo. Load it now, while no GL context
+        # exists. Absent on macOS and on CPU-only wheels, which is fine.
+        import triton  # noqa: F401
+    except Exception:  # noqa: BLE001 - a broken triton must not break the sim
+        pass
+
+
+preimport_torch_if_needed(choose_gl_backend())

@@ -74,6 +74,23 @@ sudo apt-get install -y libosmesa6      # software, works anywhere
 sudo apt-get install -y libegl1         # hardware, needs a GPU driver
 ```
 
+<details>
+<summary><b>Troubleshooting: a segfault with no traceback on headless Linux</b></summary>
+
+If a script dies with `Fatal Python error: Segmentation fault` and no Python
+traceback, you are almost certainly on software rendering (OSMesa) with a CUDA
+PyTorch wheel. Mesa's `llvmpipe` and PyTorch's bundled Triton each load their own
+LLVM, and whichever loads second crashes the process.
+
+The repo handles this automatically — `scripts/_bootstrap.py` imports torch and
+Triton before any GL context exists — so it should only bite you in your own
+scripts. If it does, import torch **and** `triton` before touching MuJoCo's
+renderer. Importing torch alone is not enough: it loads Triton lazily.
+Installing a GPU driver so EGL is used instead also fixes it.
+[docs/design.md §8](docs/design.md) has the details.
+
+</details>
+
 **Without `make`** (any OS) every step is a plain script:
 
 ```bash

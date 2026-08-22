@@ -41,14 +41,13 @@ jobs:
         if: steps.assets.outputs.cache-hit != 'true'
         run: python scripts/fetch_assets.py
 
+      # MUJOCO_GL is deliberately left unset: scripts/_bootstrap.py probes for a
+      # working backend by rendering a real frame, which is the behaviour users
+      # get, so CI exercises the same path.
       - name: Verify the install
-        env:
-          MUJOCO_GL: osmesa
         run: python scripts/check_install.py
 
       - name: Test
-        env:
-          MUJOCO_GL: osmesa
         run: pytest tests/ -q
 
   lint:

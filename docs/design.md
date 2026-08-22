@@ -224,7 +224,44 @@ DataLoader workers.
 
 ---
 
-## 8. Known limitations
+## 8. The OSMesa / Triton segfault
+
+Worth writing down because it costs an afternoon to find and the symptom points
+nowhere useful.
+
+On a headless Linux machine using **software rendering**, this crashes:
+
+```python
+import mujoco                       # MUJOCO_GL=osmesa
+m = mujoco.MjModel.from_xml_string("<mujoco><worldbody>"
+                                   "<geom type='plane' size='1 1 .1'/></worldbody></mujoco>")
+r = mujoco.Renderer(m, 64, 64); r.update_scene(mujoco.MjData(m)); r.render()
+import triton                       # Segmentation fault
+```
+
+Mesa's `llvmpipe` software rasteriser links LLVM, and Triton -- which ships
+inside the CUDA PyTorch wheel -- bundles its own. Whichever loads second lands in
+a process holding conflicting LLVM symbols and dies. There is no Python
+traceback, only `Fatal Python error: Segmentation fault`.
+
+It is easy to misdiagnose. Every test file passed on its own and the full suite
+segfaulted, which looks exactly like memory pressure or a flaky fixture. It is
+neither: it is deterministic, and it depends only on the order of two imports.
+
+The order is subtle because **torch imports Triton lazily**, from
+`torch._dynamo`. Importing torch up front is *not* enough; the clash simply moves
+to whatever line first touches dynamo -- `torch.load`, say, halfway through an
+evaluation run.
+
+`scripts/_bootstrap.preimport_torch_if_needed` therefore imports torch **and**
+Triton explicitly, before any GL context exists, and only when the chosen backend
+is OSMesa. EGL does not clash, so nothing pays for this on a machine with a
+working GPU driver. `TORCHDYNAMO_DISABLE=1` does *not* help -- dynamo still
+imports Triton.
+
+---
+
+## 9. Known limitations
 
 * **Single object, clean table.** No clutter, no occlusion, no bin. This is why
   the depth-only heuristic baseline is strong: with one isolated object, the
