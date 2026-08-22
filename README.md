@@ -91,18 +91,49 @@ Installing a GPU driver so EGL is used instead also fixes it.
 
 </details>
 
-**Without `make`** (any OS) every step is a plain script:
+**Without `make`** — macOS / Linux:
 
 ```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev]"          # Windows: .venv\Scripts\pip
-python scripts/fetch_assets.py
-python scripts/check_install.py
-python scripts/run_baseline.py --episodes 200 --workers 4
-python scripts/collect_dataset.py --episodes 10000 --workers 4 --split seen --out data/grasp10k
-python scripts/train.py --data data/grasp10k --out runs/grasp_cnn
-python scripts/evaluate.py --checkpoint runs/grasp_cnn/best.pt
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/python scripts/fetch_assets.py
+.venv/bin/python scripts/check_install.py
+.venv/bin/python scripts/run_baseline.py --episodes 200 --workers 4
+.venv/bin/python scripts/collect_dataset.py --episodes 10000 --workers 4 --split seen --out data/grasp10k
+.venv/bin/python scripts/train.py --data data/grasp10k --out runs/grasp_cnn
+.venv/bin/python scripts/evaluate.py --checkpoint runs/grasp_cnn/best.pt
 ```
+
+**Windows** (`cmd.exe`) — `make` is not present, `\` is not a line continuation, and
+each command goes on one line. Clone somewhere under your user profile, not into
+`C:\Windows\System32`:
+
+```cmd
+cd /d %USERPROFILE%
+git clone https://github.com/abyyworld/Simulated-grasping.git
+cd Simulated-grasping
+py -m venv .venv
+.venv\Scripts\python -m pip install -U pip
+```
+
+> **NVIDIA users, read this before `pip install -e .`** — on Windows the default
+> PyPI `torch` wheel is **CPU-only**, so your GPU would sit idle. Install the CUDA
+> build first (match the CUDA version to your driver):
+>
+> ```cmd
+> .venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+> ```
+
+```cmd
+.venv\Scripts\pip install -e .[dev]
+.venv\Scripts\python scripts\fetch_assets.py
+.venv\Scripts\python scripts\check_install.py
+.venv\Scripts\python scripts\collect_dataset.py --episodes 10000 --workers 8 --split seen --out data\grasp10k
+.venv\Scripts\python scripts\train.py --data data\grasp10k --out runs\grasp_cnn --epochs 30 --batch-size 32
+```
+
+`check_install.py` prints the selected torch device; if it says `cpu` on an NVIDIA
+machine, the CUDA wheel did not install.
 
 Everything in Project 1 runs on an M-series MacBook, including training. The one
 thing that genuinely requires a Linux + NVIDIA box is the Isaac Lab port
