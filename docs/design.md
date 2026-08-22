@@ -151,16 +151,31 @@ Executing only the oracle grasp would give a dataset that is ~90% positive and
 carries no information about *where not to grasp* — which is exactly what a
 grasp-quality network has to learn. Episodes are drawn from a mixture:
 
-| mode | weight | what it teaches | measured positive rate |
-|---|---|---|---|
-| `near_oracle` | 0.45 | precision; near-misses | ~63% |
-| `on_object` | 0.25 | the bulk of the signal | ~44% |
-| `edge` | 0.15 | hard cases at the silhouette | ~33% |
-| `off_object` | 0.15 | unambiguous negatives | 0% |
+| mode | weight | what it teaches | n | positive rate |
+|---|---|---|---|---|
+| `near_oracle` | 0.45 | precision; near-misses | 4508 | 56.8% |
+| `on_object` | 0.25 | the bulk of the signal | 2527 | 36.2% |
+| `edge` | 0.15 | hard cases at the silhouette | 1475 | 28.5% |
+| `off_object` | 0.15 | unambiguous negatives | 1490 | 0.9% |
 
-The result is a roughly balanced dataset (~45% positive) rather than a
-degenerate one. The weights are a design choice, not a tuned hyper-parameter,
-and they are recorded in `dataset_meta.json`.
+Measured over the full 10 000-episode run. The result is a balanced dataset —
+**39.1% positive** — rather than the ~90% a pure-oracle collection would give.
+The weights are a design choice, not a tuned hyper-parameter, and they are
+recorded in `dataset_meta.json`.
+
+`off_object` is 0.9% rather than exactly zero because it samples a uniformly
+random point in the workspace, which occasionally lands on or beside the object
+by chance. That is correct behaviour, not a leak: the label still comes from
+executing the grasp, so those few episodes are genuine positives.
+
+Per-category positive rates over the same run — box 44.6%, capsule 47.1%,
+cylinder 33.1%, sphere 31.9% — show the sampler is harder on the rounder shapes,
+which is what you would expect and is useful signal rather than noise.
+
+Collection throughput was 6.7 episodes/s with four worker processes on four CPU
+cores (25 minutes for 10 000 episodes, 2.4 GB on disk). MuJoCo reported a
+diverged solve in 10 of those 10 000 episodes; those are dropped rather than
+written (see `env._is_unstable`).
 
 ---
 

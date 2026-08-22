@@ -16,9 +16,11 @@ assets/franka_emika_panda/
 # Generated data / runs / media
 data/
 runs/
-media/*.mp4
-media/*.gif
+media/*
+# ...except the two assets the README embeds, which must ship with the repo.
 !media/.gitkeep
+!media/grasp_demo.gif
+!media/predictions.png
 outputs/
 *.npy
 *.npz

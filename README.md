@@ -42,6 +42,16 @@ make media         # README GIF + prediction figure
 
 Every target takes `WORKERS=`, `EPISODES=`, `DATA=`, `RUN=`.
 
+**Training without a GPU.** A step at the default 224x224 costs ~3.7 s on four
+CPU cores, so a full run is impractical. `--input-size 112` is ~4x cheaper per
+step (7 min per epoch over 9000 samples) and quantises grasp positions to 4.4 mm
+instead of 2.2 mm, which is fine next to 20–60 mm objects:
+
+```bash
+python scripts/train.py --data data/grasp10k --out runs/grasp_cnn \
+    --epochs 12 --batch-size 16 --input-size 112
+```
+
 ### Platform notes
 
 Runs on **Linux, macOS and Windows**, on CUDA / Apple MPS / CPU. Both the render

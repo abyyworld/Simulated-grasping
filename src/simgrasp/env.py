@@ -31,6 +31,7 @@ import numpy as np
 from .camera import CameraIntrinsics, RGBDCamera, height_map
 from .controllers import ArmInterface, CartesianController
 from .grasp import Grasp, grasp_z_from_surface
+from .heightmap import OBJECT_HEIGHT_THRESHOLD
 from .objects import ObjectSpec, sample_category, sample_object
 from .randomize import SceneRandomizer, probe_object
 from .scene import (
@@ -71,7 +72,7 @@ class Observation:
     intrinsics: CameraIntrinsics
     table_z: float
 
-    def object_mask(self, threshold: float = 0.005) -> np.ndarray:
+    def object_mask(self, threshold: float = OBJECT_HEIGHT_THRESHOLD) -> np.ndarray:
         """Pixels standing more than ``threshold`` above the table."""
         return self.height > threshold
 
@@ -164,26 +165,27 @@ class PandaGraspEnv:
         self.randomizer.apply_object(self.data, spec, probe, opts.object_pos, opts.object_yaw,
                                      self.table_z)
 
-        spawn_xy = opts.object_pos
+        # Settle, and if the object ended up somewhere the camera or the arm
+        # cannot deal with, re-place it nearer the middle and try again. With the
+        # current catalogue this effectively never fires -- worst-case settling
+        # displacement is 0.09 mm -- but a category with a rounder profile would
+        # roll, and silently grasping at a stale pose would be worse than a retry.
+        centre = np.array([np.mean(WORKSPACE_X), np.mean(WORKSPACE_Y)])
+        spawn_xy = np.asarray(opts.object_pos, dtype=np.float64)
         replaced = False
         for attempt in range(max_placement_tries):
             mujoco.mj_resetData(self.model, self.data)
             self.controller.reset_to(CAPTURE_QPOS)
-            self.randomizer.set_object_pose(self.data, spawn_xy, opts.object_yaw, self.table_z)
+            self.randomizer.set_object_pose(self.data, tuple(spawn_xy), opts.object_yaw,
+                                            self.table_z)
             mujoco.mj_forward(self.model, self.data)
             self.controller.settle(SETTLE_TIME)
 
-            pos, quat = self.randomizer.object_pose(self.data)
+            pos, _ = self.randomizer.object_pose(self.data)
             if self._within_workspace(pos) or attempt == max_placement_tries - 1:
                 break
-            # Rolled out of reach: re-place nearer the middle of the workspace.
             replaced = True
-            spawn_xy = (
-                float(np.clip(spawn_xy[0], *self._padded(WORKSPACE_X))),
-                float(np.clip(spawn_xy[1], *self._padded(WORKSPACE_Y))),
-            )
-            spawn_xy = (0.5 * (spawn_xy[0] + np.mean(WORKSPACE_X)),
-                        0.5 * (spawn_xy[1] + np.mean(WORKSPACE_Y)))
+            spawn_xy = 0.5 * (spawn_xy + centre)  # halve the distance to the centre
 
         pos, quat = self.randomizer.object_pose(self.data)
         mat = quat_to_mat(quat)
@@ -196,15 +198,11 @@ class PandaGraspEnv:
             object_xy=(float(pos[0]), float(pos[1])),
             object_yaw=settled_yaw,
             object_z0=float(pos[2]),
-            spawn_xy=(float(opts.object_pos[0]), float(opts.object_pos[1])),
-            settle_displacement=float(np.linalg.norm(pos[:2] - np.array(opts.object_pos))),
+            spawn_xy=(float(spawn_xy[0]), float(spawn_xy[1])),
+            settle_displacement=float(np.linalg.norm(pos[:2] - spawn_xy)),
             replaced=replaced,
         )
         return self.observe()
-
-    @staticmethod
-    def _padded(bounds: tuple[float, float]) -> tuple[float, float]:
-        return (bounds[0] + SETTLE_BOUNDS_PAD, bounds[1] - SETTLE_BOUNDS_PAD)
 
     def _within_workspace(self, pos: np.ndarray) -> bool:
         lo_x, hi_x = WORKSPACE_X[0] - SETTLE_BOUNDS_PAD, WORKSPACE_X[1] + SETTLE_BOUNDS_PAD
