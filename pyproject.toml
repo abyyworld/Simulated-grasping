@@ -18,7 +18,6 @@ dependencies = [
     "opencv-python-headless>=4.8",
     "imageio>=2.31",
     "imageio-ffmpeg>=0.4.9",
-    "pyyaml>=6.0",
     "tqdm>=4.65",
     "matplotlib>=3.7",
 ]
