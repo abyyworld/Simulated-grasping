@@ -65,6 +65,13 @@ class GraspHint:
     yaw: float
     width: float
     surface_z: float
+    grasp_z: float = 0.0
+
+    def __post_init__(self) -> None:
+        # Default the preferred grip height to the mid-height of the local column,
+        # which is what a parallel jaw wants for every convex primitive here.
+        if self.grasp_z == 0.0:
+            object.__setattr__(self, "grasp_z", 0.5 * self.surface_z)
 
 
 @dataclass(frozen=True)
@@ -110,6 +117,25 @@ def _random_material(rng: np.random.Generator) -> tuple[float, tuple[float, floa
     density = float(rng.uniform(300.0, 1200.0))
     friction = (float(rng.uniform(0.6, 1.2)), 0.005, 0.005)
     return density, friction
+
+
+# Half-width of a Panda fingertip perpendicular to the closing direction. A
+# grasp point must sit at least this far from any neighbouring part of the object
+# or the descending finger lands on it.
+FINGER_HALF_WIDTH = 0.010
+
+
+def _clip_to(value: float, lo: float, hi: float) -> float:
+    """Clip, falling back to the midpoint when the interval is empty.
+
+    An empty interval means the object's own geometry leaves no clearance for a
+    finger anywhere along that bar. Returning the midpoint keeps the hint on the
+    object rather than raising; those cases simply grasp less reliably, which is
+    the honest outcome.
+    """
+    if lo > hi:
+        return 0.5 * (lo + hi)
+    return float(np.clip(value, lo, hi))
 
 
 def _box_hint(half_x: float, half_y: float, top: float) -> GraspHint:
@@ -188,9 +214,20 @@ def _make_l_shape(rng: np.random.Generator):
         GeomSpec("box", (la, w, t), pos=(0.0, 0.0, t)),
         GeomSpec("box", (w, lb, t), pos=(la - w, lb + w, t)),
     )
+    # Centre of mass of the two arms (uniform density, so volume-weighted).
+    # Grasping an L at the middle of one arm leaves a long moment arm to the CoM;
+    # under a 0.2 m lift the object rotates in the jaws and slips out. Placing the
+    # jaw axis as near the CoM as finger clearance allows is the standard
+    # minimum-moment grasp criterion, and it is what fixed these categories.
+    com_x = lb * (la - w) / (la + lb)
+    com_y = lb * (lb + w) / (la + lb)
+    # Arm B occupies x >= la - 2w at y >= w, so a finger straddling arm A on the
+    # +y side must stay clear of it.
+    gx = _clip_to(com_x, -la + FINGER_HALF_WIDTH, la - 2.0 * w - FINGER_HALF_WIDTH)
+    gy = _clip_to(com_y, w + FINGER_HALF_WIDTH + 0.002, 2.0 * lb + w - FINGER_HALF_WIDTH)
     hints = (
-        GraspHint(xy=(-la / 2.0, 0.0), yaw=np.pi / 2.0, width=2.0 * w, surface_z=2.0 * t),
-        GraspHint(xy=(la - w, lb + w), yaw=0.0, width=2.0 * w, surface_z=2.0 * t),
+        GraspHint(xy=(gx, 0.0), yaw=np.pi / 2.0, width=2.0 * w, surface_z=2.0 * t),
+        GraspHint(xy=(la - w, gy), yaw=0.0, width=2.0 * w, surface_z=2.0 * t),
     )
     return geoms, hints, 2.0 * t, float(np.hypot(la, lb)), {"arms": (la, lb, w, t)}
 
@@ -204,9 +241,16 @@ def _make_t_shape(rng: np.random.Generator):
         GeomSpec("box", (la, w, t), pos=(0.0, 0.0, t)),
         GeomSpec("box", (w, ls, t), pos=(0.0, -(w + ls), t)),
     )
+    # As for the L: put the jaw axis as close to the CoM as clearance allows.
+    # For a T the stem always beats the crossbar, because a finger straddling the
+    # crossbar near x = 0 lands on the stem, forcing the grasp out to the tip.
+    com_y = -ls * (w + ls) / (la + ls)
+    gy = _clip_to(com_y, -(w + 2.0 * ls) + FINGER_HALF_WIDTH, -(w + FINGER_HALF_WIDTH + 0.002))
+    gx = _clip_to(w + FINGER_HALF_WIDTH + 0.003, w + FINGER_HALF_WIDTH + 0.003,
+                  la - FINGER_HALF_WIDTH)
     hints = (
-        GraspHint(xy=(la / 2.0, 0.0), yaw=np.pi / 2.0, width=2.0 * w, surface_z=2.0 * t),
-        GraspHint(xy=(0.0, -(w + ls)), yaw=0.0, width=2.0 * w, surface_z=2.0 * t),
+        GraspHint(xy=(0.0, gy), yaw=0.0, width=2.0 * w, surface_z=2.0 * t),
+        GraspHint(xy=(gx, 0.0), yaw=np.pi / 2.0, width=2.0 * w, surface_z=2.0 * t),
     )
     return geoms, hints, 2.0 * t, float(np.hypot(la, ls)), {"cross": (la, ls, w, t)}
 

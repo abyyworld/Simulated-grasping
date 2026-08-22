@@ -22,11 +22,15 @@ import numpy as np
 from .camera import CameraIntrinsics, deproject_pixels, project_points
 from .transforms import wrap_grasp_angle
 
-# Distance below the object's top surface at which the fingertip pads are centred.
+# Minimum distance below the object's top surface for the fingertip pads.
 GRASP_DEPTH = 0.012
 # Lowest TCP height above the table. The Panda fingertips reach ~9 mm below the
 # TCP site, so this keeps 5 mm of clearance between the tips and the table.
 MIN_TCP_HEIGHT = 0.014
+# Deepest the TCP may sit below an object's top surface. The Panda hand body
+# starts ~43 mm above the TCP along the approach axis, so descending further than
+# this drives the hand itself into the top of a tall object.
+MAX_APPROACH_DEPTH = 0.035
 # Extra opening added to the object width when pre-shaping, so the fingers clear
 # the object on the way down.
 PRESHAPE_CLEARANCE = 0.022
@@ -61,9 +65,35 @@ class Grasp:
         return Grasp(float(a[0]), float(a[1]), float(a[2]), float(a[3]), float(a[4]))
 
 
-def grasp_z_from_surface(surface_z_world: float, table_z: float, depth: float = GRASP_DEPTH) -> float:
-    """TCP height for a grasp whose local top surface is at ``surface_z_world``."""
-    return float(max(surface_z_world - depth, table_z + MIN_TCP_HEIGHT))
+def grasp_z_from_surface(surface_z_world: float, table_z: float,
+                         mid_z_world: float | None = None,
+                         depth: float = GRASP_DEPTH) -> float:
+    """TCP height for a grasp on a surface whose top is at ``surface_z_world``.
+
+    The rule is "grip the object at its mid-height", subject to three limits:
+
+    * at least ``GRASP_DEPTH`` below the top, so the pads bite the side rather
+      than skimming the top face;
+    * no more than ``MAX_APPROACH_DEPTH`` below the top, so the hand body clears
+      a tall object;
+    * at least ``MIN_TCP_HEIGHT`` above the table, so the fingertips do not scrape.
+
+    Gripping at mid-height rather than at a fixed offset below the top is what
+    makes spheres and ellipsoids work. With a fixed 12 mm offset the pads land on
+    a sphere's *upper* hemisphere, and closing there drives the ball downward and
+    out of the jaws; measured sphere success went from 0/3 to solid once the pads
+    were centred on the equator instead.
+
+    ``mid_z_world`` is the object's half-height in world coordinates. Policies
+    that only see a height map do not know it exactly and pass ``None``, which
+    assumes the object fills the space between the table and its top surface --
+    exactly right for the primitives here and a good approximation in general.
+    """
+    if mid_z_world is None:
+        mid_z_world = 0.5 * (surface_z_world + table_z)
+    z = min(mid_z_world, surface_z_world - depth)
+    z = max(z, surface_z_world - MAX_APPROACH_DEPTH)
+    return float(max(z, table_z + MIN_TCP_HEIGHT))
 
 
 @dataclass(frozen=True)

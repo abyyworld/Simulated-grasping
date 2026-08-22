@@ -189,6 +189,7 @@ class CartesianController:
         self._scratch = mujoco.MjData(model)
         self.dt = float(model.opt.timestep)
         self.ik_failures = 0
+        self.last_convergence_error = 0.0
 
     # -- low level ---------------------------------------------------------- #
     def step(self, n: int = 1, hook: StepHook | None = None) -> None:
@@ -199,6 +200,30 @@ class CartesianController:
 
     def settle(self, seconds: float = 0.2, hook: StepHook | None = None) -> None:
         self.step(int(round(seconds / self.dt)), hook)
+
+    def hold_until_converged(self, target_pos, target_mat=None, *, tol: float = 1.5e-3,
+                             max_time: float = 0.6, hook: StepHook | None = None) -> float:
+        """Hold the current setpoint until the TCP actually gets there.
+
+        The arm is driven by position servos with finite stiffness, so the TCP
+        trails its setpoint. Measured on the descent phase the lag reached ~15 mm,
+        which is enough for the fingertip pads to sit above a 35 mm-tall object
+        when the gripper is told to close: the fingers then catch the top edge and
+        squirt the object sideways instead of gripping it. Every failed grasp of a
+        flat object traced back to this.
+
+        Returns the final position error so callers can record it.
+        """
+        target_pos = np.asarray(target_pos, dtype=np.float64)
+        steps = max(1, int(round(max_time / self.dt)))
+        err = np.inf
+        for _ in range(steps):
+            pos, _ = self.arm.tcp_pose(self.data)
+            err = float(np.linalg.norm(pos - target_pos))
+            if err < tol:
+                break
+            self.step(1, hook)
+        return err
 
     def solve_ik(self, pos, mat, q_init=None, **kw) -> IKResult:
         if q_init is None:
@@ -218,7 +243,9 @@ class CartesianController:
             self.step(1, hook)
 
     def move_to_pose(self, pos, mat, duration: float = 1.0, cartesian: bool = False,
-                     waypoints: int = 12, hook: StepHook | None = None) -> IKResult:
+                     waypoints: int = 12, hook: StepHook | None = None,
+                     converge: bool = True, converge_tol: float = 1.5e-3,
+                     converge_time: float = 0.6) -> IKResult:
         """Move the TCP to ``(pos, mat)``.
 
         ``cartesian=True`` interpolates the *TCP position* along a straight line
@@ -231,6 +258,9 @@ class CartesianController:
             if not res.success:
                 self.ik_failures += 1
             self.move_to_joint(res.qpos, duration, hook)
+            if converge:
+                self.last_convergence_error = self.hold_until_converged(
+                    pos, mat, tol=converge_tol, max_time=converge_time, hook=hook)
             return res
 
         p0, _ = self.arm.tcp_pose(self.data)
@@ -246,6 +276,9 @@ class CartesianController:
                 self.ik_failures += 1
             q_seed = last.qpos
             self._ramp_to(last.qpos, duration / seg, hook)
+        if converge:
+            self.last_convergence_error = self.hold_until_converged(
+                p1, mat, tol=converge_tol, max_time=converge_time, hook=hook)
         return last
 
     def _ramp_to(self, q_target: np.ndarray, duration: float, hook: StepHook | None) -> None:
