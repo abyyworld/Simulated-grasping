@@ -23,6 +23,15 @@ from .env import PandaGraspEnv
 from .objects import SEEN_CATEGORIES, UNSEEN_CATEGORIES
 from .seeding import rng_for_episode
 
+# Every reported evaluation starts here.
+#
+# Datasets are collected from episode 0 upward, so evaluating from 0 would score
+# a learned policy on scenes it trained on. Scene generation is seeded by
+# (base_seed, episode_index), so an index far outside any plausible collection
+# range is guaranteed-disjoint held-out data -- no separate test-set bookkeeping,
+# and it stays true however large a dataset someone collects.
+EVAL_EPISODE_OFFSET = 1_000_000
+
 
 @dataclass
 class TrialRecord:

@@ -20,7 +20,8 @@ def main() -> int:
     ap.add_argument("--episodes", type=int, default=200)
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--offset", type=int, default=0)
+    ap.add_argument("--offset", type=int, default=None,
+                    help="starting episode index (default: the held-out evaluation range)")
     ap.add_argument("--policies", nargs="+", default=["oracle", "heuristic"])
     ap.add_argument("--checkpoint", default="runs/grasp_cnn/best.pt",
                     help="used when 'cnn' is among --policies")
@@ -30,18 +31,23 @@ def main() -> int:
     from pathlib import Path
 
     from simgrasp.evaluation import (
+        EVAL_EPISODE_OFFSET,
         evaluate_policy,
         format_summary,
         save_records_csv,
         save_summary,
     )
 
+    offset = EVAL_EPISODE_OFFSET if args.offset is None else args.offset
+    print(f"evaluating from episode {offset} "
+          f"({'held-out range' if offset >= EVAL_EPISODE_OFFSET else 'CUSTOM - may overlap training data'})")
+
     out = Path(args.out)
     for name in args.policies:
         kwargs = {"checkpoint": args.checkpoint} if name == "cnn" else None
         print(f"\n=== {name} ===", flush=True)
         summary = evaluate_policy(name, n_episodes=args.episodes, workers=args.workers,
-                                  base_seed=args.seed, episode_offset=args.offset,
+                                  base_seed=args.seed, episode_offset=offset,
                                   policy_kwargs=kwargs)
         print(format_summary(summary))
         save_summary(summary, out / f"{name}.json", keep_records=False)

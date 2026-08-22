@@ -23,8 +23,8 @@ def main() -> int:
     ap.add_argument("--episodes", type=int, default=200, help="episodes per split")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--offset", type=int, default=1_000_000,
-                    help="episode index offset; keep clear of the training range")
+    ap.add_argument("--offset", type=int, default=None,
+                    help="starting episode index (default: the held-out evaluation range)")
     ap.add_argument("--policies", nargs="+", default=["oracle", "heuristic", "cnn"])
     ap.add_argument("--checkpoint", default="runs/grasp_cnn/best.pt")
     ap.add_argument("--out", default="results/eval")
@@ -32,7 +32,14 @@ def main() -> int:
 
     from pathlib import Path
 
-    from simgrasp.evaluation import evaluate_policy, format_summary, save_summary
+    from simgrasp.evaluation import (
+        EVAL_EPISODE_OFFSET,
+        evaluate_policy,
+        format_summary,
+        save_summary,
+    )
+
+    offset = EVAL_EPISODE_OFFSET if args.offset is None else args.offset
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -45,7 +52,7 @@ def main() -> int:
             print(f"\n=== {name} / {split} ===", flush=True)
             summary = evaluate_policy(name, n_episodes=args.episodes, split=split,
                                       workers=args.workers, base_seed=args.seed,
-                                      episode_offset=args.offset, policy_kwargs=kwargs)
+                                      episode_offset=offset, policy_kwargs=kwargs)
             print(format_summary(summary))
             save_summary(summary, out / f"{name}_{split}.json", keep_records=False)
             table[name][split] = summary["success_rate"]
