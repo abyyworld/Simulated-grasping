@@ -1,0 +1,66 @@
+{
+  "runs": [
+    {
+      "checkpoint": "runs/grasp_cnn_norot/best.pt",
+      "angle_error_deg": 47.622228426472546,
+      "angle_error_deg_seen": 55.18571115164921,
+      "angle_error_deg_heldout": 44.80446035238713,
+      "bin_spread": 0.03182646461895534,
+      "n_scored": 70,
+      "n_seen": 19,
+      "n_heldout": 51,
+      "n_skipped_indeterminate": 38,
+      "per_category_error_deg": {
+        "box": 55.50491494684733,
+        "capsule": 54.99950893778364,
+        "ellipsoid": 63.01539472400907,
+        "l_shape": 39.35944664713463,
+        "t_shape": 51.691531446556915,
+        "mug": 43.92107219364504,
+        "dumbbell": 39.693057529306465
+      },
+      "per_category_bin_spread": {
+        "box": 0.021075878824506487,
+        "capsule": 0.034335712591807045,
+        "ellipsoid": 0.03323632478713989,
+        "l_shape": 0.01930871109167735,
+        "t_shape": 0.011178930600484213,
+        "mug": 0.04414060711860657,
+        "dumbbell": 0.056087071696917214
+      }
+    },
+    {
+      "checkpoint": "runs/grasp_cnn/best.pt",
+      "angle_error_deg": 46.507574482790496,
+      "angle_error_deg_seen": 48.6418203927629,
+      "angle_error_deg_heldout": 45.71246326142822,
+      "bin_spread": 0.02561265230178833,
+      "n_scored": 70,
+      "n_seen": 19,
+      "n_heldout": 51,
+      "n_skipped_indeterminate": 38,
+      "per_category_error_deg": {
+        "box": 68.37499961700418,
+        "capsule": 37.130799178622155,
+        "ellipsoid": 58.015393446506515,
+        "l_shape": 50.36451998276308,
+        "t_shape": 44.6354812078404,
+        "mug": 48.46892011996069,
+        "dumbbell": 36.30519918887912
+      },
+      "per_category_bin_spread": {
+        "box": 0.025586060115269253,
+        "capsule": 0.02720162272453308,
+        "ellipsoid": 0.03653746843338013,
+        "l_shape": 0.015579248468081156,
+        "t_shape": 0.011815264821052551,
+        "mug": 0.033720001578330994,
+        "dumbbell": 0.037031431992848717
+      }
+    }
+  ],
+  "norot_deg": 47.622228426472546,
+  "rot_deg": 46.507574482790496,
+  "norot_spread": 0.03182646461895534,
+  "rot_spread": 0.02561265230178833
+}
