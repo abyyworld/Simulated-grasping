@@ -52,23 +52,39 @@ class LearnedPolicy:
         self.last_confidence: float = 0.0
 
     # -- input --------------------------------------------------------------- #
-    def _tensor(self, obs: Observation) -> torch.Tensor:
+    def _tensor(self, obs: Observation) -> tuple[torch.Tensor, float]:
+        """Build the network input, resized to whatever the model was trained at.
+
+        Returns the tensor and the scale from *model* pixels back to *observation*
+        pixels, so predictions can be mapped onto the real image.
+        """
         from ..data.dataset import normalise_height, normalise_rgb
 
-        channels = [normalise_height(obs.height)]
-        if self.cfg.use_rgb:
-            channels.extend(normalise_rgb(obs.rgb))
-        x = np.stack(channels, axis=0)[None]
-        return torch.from_numpy(x).to(self.device)
+        height, rgb = obs.height, obs.rgb
+        scale = 1.0
+        target = self.cfg.input_size
+        if target and target != height.shape[0]:
+            interp = cv2.INTER_AREA if target < height.shape[0] else cv2.INTER_LINEAR
+            scale = height.shape[0] / target
+            height = cv2.resize(height, (target, target), interpolation=interp)
+            rgb = cv2.resize(rgb, (target, target), interpolation=interp)
 
-    def _workspace_mask(self, obs: Observation) -> np.ndarray:
-        key = (obs.intrinsics.width, obs.intrinsics.height, float(obs.cam_pos[2]))
+        channels = [normalise_height(height)]
+        if self.cfg.use_rgb:
+            channels.extend(normalise_rgb(rgb))
+        x = np.stack(channels, axis=0)[None]
+        return torch.from_numpy(x).to(self.device), scale
+
+    def _workspace_mask(self, obs: Observation, shape: tuple[int, int]) -> np.ndarray:
+        key = (shape, float(obs.cam_pos[2]))
         cached = self._mask_cache.get(key)
         if cached is not None:
             return cached
-        h, w = obs.height.shape
+        h, w = shape
+        sy = obs.height.shape[0] / h
+        sx = obs.height.shape[1] / w
         vv, uu = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
-        uv = np.stack([uu.ravel(), vv.ravel()], axis=1).astype(np.float64)
+        uv = np.stack([uu.ravel() * sx, vv.ravel() * sy], axis=1).astype(np.float64)
         depth = np.full(uv.shape[0], float(obs.cam_pos[2] - obs.table_z))
         world = deproject_pixels(uv, depth, obs.cam_pos, obs.cam_mat, obs.intrinsics)
         m = self.workspace_margin
@@ -80,19 +96,22 @@ class LearnedPolicy:
 
     # -- inference ------------------------------------------------------------ #
     @torch.no_grad()
-    def predict_maps(self, obs: Observation) -> tuple[np.ndarray, np.ndarray]:
-        out = self.model(self._tensor(obs))
+    def predict_maps(self, obs: Observation) -> tuple[np.ndarray, np.ndarray, float]:
+        """Dense (quality, width) maps plus the model-to-observation pixel scale."""
+        x, scale = self._tensor(obs)
+        out = self.model(x)
         quality = torch.sigmoid(out["quality"])[0].float().cpu().numpy()
         width = out["width"][0].float().cpu().numpy()
         if self.smooth_sigma > 0:
-            k = int(2 * round(3 * self.smooth_sigma) + 1)
-            quality = np.stack([cv2.GaussianBlur(q, (k, k), self.smooth_sigma) for q in quality])
-        return quality, width
+            sigma = self.smooth_sigma / scale  # blur a fixed *physical* radius
+            k = max(3, int(2 * round(3 * sigma) + 1))
+            quality = np.stack([cv2.GaussianBlur(q, (k, k), sigma) for q in quality])
+        return quality, width, scale
 
     def __call__(self, obs: Observation, env: PandaGraspEnv,
                  rng: np.random.Generator) -> Grasp:
-        quality, width = self.predict_maps(obs)
-        mask = self._workspace_mask(obs)
+        quality, width, scale = self.predict_maps(obs)
+        mask = self._workspace_mask(obs, quality.shape[1:])
         quality = np.where(mask[None], quality, -1.0)
         self.last_quality = quality
 
@@ -100,13 +119,15 @@ class LearnedPolicy:
         b, v, u = np.unravel_index(flat, quality.shape)
         self.last_confidence = float(quality[b, v, u])
 
+        # Map the prediction back onto the observation's pixel grid.
+        u_obs, v_obs = float(u) * scale, float(v) * scale
         angle = float(bin_to_angle(int(b)))
-        h = surface_height(obs.height, float(u), float(v))
+        h = surface_height(obs.height, u_obs, v_obs)
         depth = float(obs.cam_pos[2] - (obs.table_z + h))
-        width_px = float(width[b, v, u]) * obs.height.shape[0]
+        width_px = float(width[b, v, u]) * quality.shape[-1] * scale
         width_px = float(np.clip(width_px, 2.0, 40.0))
 
-        img = ImageGrasp(u=float(u), v=float(v), angle=angle, width_px=width_px, depth=depth)
+        img = ImageGrasp(u=u_obs, v=v_obs, angle=angle, width_px=width_px, depth=depth)
         g = image_to_grasp(img, obs.cam_pos, obs.cam_mat, obs.intrinsics)
         return Grasp(x=g.x, y=g.y,
                      z=grasp_z_from_surface(obs.table_z + h, obs.table_z),

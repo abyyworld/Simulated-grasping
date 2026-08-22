@@ -53,6 +53,7 @@ class TrainConfig:
     width_weight: float = 0.5
     val_fraction: float = 0.1
     train_split: str = "seen"
+    input_size: int | None = None
     seed: int = 0
     device: str | None = None
     amp: bool = True
@@ -82,10 +83,10 @@ def build_loaders(cfg: TrainConfig) -> tuple[DataLoader, DataLoader, GraspDatase
     if cfg.limit:
         train_eps = train_eps[: cfg.limit]
 
-    train_ds = GraspDataset(cfg.data, split=cfg.train_split, use_rgb=cfg.use_rgb,
-                            episode_filter=train_eps, free_negatives=cfg.free_negatives)
-    val_ds = GraspDataset(cfg.data, split=cfg.train_split, use_rgb=cfg.use_rgb,
-                          episode_filter=val_eps, free_negatives=cfg.free_negatives)
+    common_ds = dict(split=cfg.train_split, use_rgb=cfg.use_rgb,
+                     free_negatives=cfg.free_negatives, input_size=cfg.input_size)
+    train_ds = GraspDataset(cfg.data, episode_filter=train_eps, **common_ds)
+    val_ds = GraspDataset(cfg.data, episode_filter=val_eps, **common_ds)
 
     common = dict(batch_size=cfg.batch_size, num_workers=cfg.workers,
                   pin_memory=False, persistent_workers=cfg.workers > 0)

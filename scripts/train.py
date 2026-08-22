@@ -35,6 +35,9 @@ def main() -> int:
     ap.add_argument("--no-amp", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--limit", type=int, default=None, help="cap training episodes (for smoke tests)")
+    ap.add_argument("--input-size", type=int, default=None,
+                    help="resize inputs to NxN (labels are scaled too). Halving the "
+                         "resolution is ~4x cheaper per step; useful without a GPU")
     args = ap.parse_args()
 
     from simgrasp.training import TrainConfig, train
@@ -45,7 +48,7 @@ def main() -> int:
         free_negatives=args.free_negatives, free_negative_weight=args.free_negative_weight,
         width_weight=args.width_weight, val_fraction=args.val_fraction,
         train_split=args.train_split, device=args.device, amp=not args.no_amp,
-        seed=args.seed, limit=args.limit,
+        seed=args.seed, limit=args.limit, input_size=args.input_size,
     )
     summary = train(cfg)
     print()
