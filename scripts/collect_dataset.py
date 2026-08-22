@@ -32,6 +32,10 @@ def main() -> int:
                          "collects everything and the loader filters at train time")
     ap.add_argument("--offset", type=int, default=0, help="starting episode index")
     ap.add_argument("--no-rgb", action="store_true", help="store height only (40%% smaller)")
+    ap.add_argument("--angles-per-scene", type=int, default=1,
+                    help="execute this many grasps at the same point per scene, spread "
+                         "over the half turn. >1 gives the network contrastive evidence "
+                         "about orientation, which one label per image cannot")
     args = ap.parse_args()
 
     from simgrasp.collect import collect_dataset
@@ -40,7 +44,7 @@ def main() -> int:
         out_dir=args.out, n_episodes=args.episodes, workers=args.workers,
         base_seed=args.seed, image_size=args.image_size, split=args.split,
         shard_size=args.shard_size, store_rgb=not args.no_rgb,
-        episode_offset=args.offset,
+        angles_per_scene=args.angles_per_scene, episode_offset=args.offset,
     )
     s = meta["stats"]
     print()

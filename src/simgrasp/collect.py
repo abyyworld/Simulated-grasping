@@ -27,6 +27,7 @@ from .grasp import grasp_to_image
 from .objects import SEEN_CATEGORIES
 from .policies import GraspSampler
 from .seeding import rng_for_episode
+from .transforms import wrap_grasp_angle
 
 
 @dataclass
@@ -53,6 +54,30 @@ class EpisodeLabel:
     sampler_mode: str
     object_top_z: float
     settle_displacement: float
+    # Which of the angles-per-scene variants this is; 0 is the sampler's own.
+    angle_index: int = 0
+
+
+def _angle_variants(base, count: int, rng) -> list:
+    """``count`` grasps at the same point, spread over the half turn.
+
+    The first is always the sampler's own proposal, so a run with
+    ``count == 1`` is byte-identical to the original behaviour. The rest are
+    offset by multiples of pi/count with a little jitter, which covers the
+    gripper's full range of distinct orientations (a parallel jaw is symmetric
+    under a half turn) without landing every sample on a bin centre.
+    """
+    from .grasp import Grasp
+
+    out = [base]
+    if count <= 1:
+        return out
+    step = np.pi / count
+    for j in range(1, count):
+        jitter = float(rng.normal(0.0, 0.25 * step))
+        yaw = float(wrap_grasp_angle(base.yaw + j * step + jitter))
+        out.append(Grasp(base.x, base.y, base.z, yaw, base.width))
+    return out
 
 
 def _git_commit() -> str:
@@ -73,9 +98,21 @@ def collect_worker(
     shard_size: int = 256,
     store_rgb: bool = True,
     sampler_kwargs: dict[str, Any] | None = None,
+    angles_per_scene: int = 1,
     verbose: bool = False,
 ) -> dict[str, Any]:
-    """Run ``episodes`` in this process, writing shards under ``w{worker_id}``."""
+    """Run ``episodes`` in this process, writing shards under ``w{worker_id}``.
+
+    ``angles_per_scene`` > 1 executes several grasps at the *same* point in the
+    same settled scene, at orientations spread over the half turn, restoring the
+    simulator state between them. This is the fix for the failure documented in
+    docs/design.md section 6: with one label per image the network can explain
+    every label with a function of the pixel alone, and orientation collapses.
+    Several labels at one pixel with different outcomes make that impossible.
+
+    It is also cheap. The settle and the render are shared, so K grasps per scene
+    cost far less than K independent episodes.
+    """
     sampler = GraspSampler(**(sampler_kwargs or {}))
     stats = {"n": 0, "successes": 0, "unstable": 0, "by_category": {}, "by_mode": {}}
     t0 = time.perf_counter()
@@ -85,43 +122,52 @@ def collect_worker(
                         prefix=f"w{worker_id:02d}", store_rgb=store_rgb) as writer:
         for n, ep in enumerate(episodes):
             obs = env.reset(ep, split=split)
+            snapshot = env.snapshot()
             rng = rng_for_episode(base_seed + 7_777_777, ep)
-            grasp = sampler(obs, env, rng)
-            result = env.execute(grasp)
-            if result.reason == "unstable":
-                # The physics diverged; the outcome is not a real label.
-                stats["unstable"] = stats.get("unstable", 0) + 1
-                continue
-            img = grasp_to_image(grasp, obs.cam_pos, obs.cam_mat, obs.intrinsics)
+            base = sampler(obs, env, rng)
+            mode = sampler.last_mode
             st = env.state
             assert st is not None
 
-            label = EpisodeLabel(
-                episode=int(ep), category=st.category,
-                split="seen" if st.category in SEEN_CATEGORIES else "unseen",
-                u=img.u, v=img.v, angle=img.angle, width_px=img.width_px, depth=img.depth,
-                world_x=grasp.x, world_y=grasp.y, world_z=grasp.z,
-                world_yaw=grasp.yaw, world_width=grasp.width,
-                success=bool(result.success), reason=result.reason,
-                lift_height=float(result.lift_height), sampler_mode=sampler.last_mode,
-                object_top_z=float(st.spec.top_z),
-                settle_displacement=float(st.settle_displacement),
-            )
-            writer.add(obs.rgb, obs.height, label)
+            for k, grasp in enumerate(_angle_variants(base, angles_per_scene, rng)):
+                if k:
+                    env.restore(snapshot)
+                result = env.execute(grasp)
+                if result.reason == "unstable":
+                    # The physics diverged; the outcome is not a real label.
+                    stats["unstable"] = stats.get("unstable", 0) + 1
+                    continue
+                img = grasp_to_image(grasp, obs.cam_pos, obs.cam_mat, obs.intrinsics)
 
-            stats["n"] += 1
-            stats["successes"] += int(result.success)
-            c = stats["by_category"].setdefault(st.category, [0, 0])
-            c[0] += 1
-            c[1] += int(result.success)
-            m = stats["by_mode"].setdefault(sampler.last_mode, [0, 0])
-            m[0] += 1
-            m[1] += int(result.success)
+                label = EpisodeLabel(
+                    episode=int(ep), category=st.category,
+                    split="seen" if st.category in SEEN_CATEGORIES else "unseen",
+                    u=img.u, v=img.v, angle=img.angle, width_px=img.width_px, depth=img.depth,
+                    world_x=grasp.x, world_y=grasp.y, world_z=grasp.z,
+                    world_yaw=grasp.yaw, world_width=grasp.width,
+                    success=bool(result.success), reason=result.reason,
+                    lift_height=float(result.lift_height), sampler_mode=mode,
+                    object_top_z=float(st.spec.top_z),
+                    settle_displacement=float(st.settle_displacement),
+                    angle_index=k,
+                )
+                writer.add(obs.rgb, obs.height, label)
+
+                stats["n"] += 1
+                stats["successes"] += int(result.success)
+                c = stats["by_category"].setdefault(st.category, [0, 0])
+                c[0] += 1
+                c[1] += int(result.success)
+                m = stats["by_mode"].setdefault(mode, [0, 0])
+                m[0] += 1
+                m[1] += int(result.success)
+
             if verbose and (n + 1) % 50 == 0:
-                rate = stats["successes"] / stats["n"]
+                rate = stats["successes"] / max(stats["n"], 1)
                 eps = (n + 1) / (time.perf_counter() - t0)
-                print(f"  [w{worker_id:02d}] {n + 1}/{len(episodes)}  "
-                      f"positive rate {rate:.1%}  {eps:.1f} ep/s", flush=True)
+                print(f"  [w{worker_id:02d}] scene {n + 1}/{len(episodes)}  "
+                      f"{stats['n']} samples  positive rate {rate:.1%}  "
+                      f"{eps:.1f} scenes/s", flush=True)
 
     stats["elapsed"] = time.perf_counter() - t0
     return stats
@@ -141,6 +187,7 @@ def collect_dataset(
     shard_size: int = 256,
     store_rgb: bool = True,
     sampler_kwargs: dict[str, Any] | None = None,
+    angles_per_scene: int = 1,
     episode_offset: int = 0,
     verbose: bool = True,
 ) -> dict[str, Any]:
@@ -150,7 +197,8 @@ def collect_dataset(
 
     common = dict(out_dir=str(out_dir), base_seed=base_seed, image_size=image_size,
                   split=split, shard_size=shard_size, store_rgb=store_rgb,
-                  sampler_kwargs=sampler_kwargs, verbose=verbose)
+                  sampler_kwargs=sampler_kwargs, angles_per_scene=angles_per_scene,
+                  verbose=verbose)
     t0 = time.perf_counter()
 
     if workers <= 1:
@@ -168,6 +216,7 @@ def collect_dataset(
     merged = _merge_stats(parts)
     meta = _build_meta(out_dir, n_episodes, base_seed, image_size, split, workers,
                        shard_size, store_rgb, sampler_kwargs, merged, elapsed)
+    meta["angles_per_scene"] = angles_per_scene
     (out_dir / "dataset_meta.json").write_text(json.dumps(meta, indent=2, default=float))
     return meta
 

@@ -224,6 +224,29 @@ class PandaGraspEnv:
             table_z=self.table_z,
         )
 
+    # -- state snapshots ------------------------------------------------------ #
+    def snapshot(self) -> tuple[np.ndarray, ...]:
+        """Capture the full simulator state so several grasps can share one scene.
+
+        Executing K grasps from the same settled scene is much cheaper than K
+        independent episodes -- one settle and one render instead of K -- and it
+        is the only way to get *contrastive* angle labels: the same pixel, the
+        same object, several gripper orientations, several outcomes.
+        """
+        d = self.data
+        return (d.qpos.copy(), d.qvel.copy(), d.ctrl.copy(), d.act.copy(), float(d.time))
+
+    def restore(self, snap: tuple[np.ndarray, ...]) -> None:
+        d = self.data
+        qpos, qvel, ctrl, act, t = snap
+        d.qpos[:] = qpos
+        d.qvel[:] = qvel
+        d.ctrl[:] = ctrl
+        if d.act.size:
+            d.act[:] = act
+        d.time = t
+        mujoco.mj_forward(self.model, d)
+
     def render_frame(self) -> np.ndarray | None:
         """Render the third-person view used for demo videos."""
         if self._renderer is None:
