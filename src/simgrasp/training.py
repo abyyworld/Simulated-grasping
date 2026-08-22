@@ -54,6 +54,7 @@ class TrainConfig:
     val_fraction: float = 0.1
     train_split: str = "seen"
     input_size: int | None = None
+    rotate: bool = True
     seed: int = 0
     device: str | None = None
     amp: bool = True
@@ -85,8 +86,10 @@ def build_loaders(cfg: TrainConfig) -> tuple[DataLoader, DataLoader, GraspDatase
 
     common_ds = dict(split=cfg.train_split, use_rgb=cfg.use_rgb,
                      free_negatives=cfg.free_negatives, input_size=cfg.input_size)
-    train_ds = GraspDataset(cfg.data, episode_filter=train_eps, **common_ds)
-    val_ds = GraspDataset(cfg.data, episode_filter=val_eps, **common_ds)
+    # Rotation is a *training* augmentation only. Rotating the validation set too
+    # would make the metric noisy and incomparable between runs.
+    train_ds = GraspDataset(cfg.data, episode_filter=train_eps, rotate=cfg.rotate, **common_ds)
+    val_ds = GraspDataset(cfg.data, episode_filter=val_eps, rotate=False, **common_ds)
 
     common = dict(batch_size=cfg.batch_size, num_workers=cfg.workers,
                   pin_memory=False, persistent_workers=cfg.workers > 0)
