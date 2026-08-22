@@ -90,6 +90,7 @@ SLOT_BOUND = 0.15
 
 ARM_JOINTS = tuple(f"joint{i}" for i in range(1, 8))
 FINGER_JOINTS = ("finger_joint1", "finger_joint2")
+ARM_BODIES = tuple(f"link{i}" for i in range(8)) + ("hand", "left_finger", "right_finger")
 
 HOME_QPOS = np.array([0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853])
 # Retracted pose used when the RGB-D observation is captured, so the arm never
@@ -226,7 +227,8 @@ def _add_worldbody(root: ET.Element, opts: SceneOptions) -> ET.Element:
 
 
 def object_geom_attrs(index: int, geom_type: str, size, pos, euler=None, rgba=(0.7, 0.3, 0.3, 1.0),
-                      density: float = 700.0, friction=(1.0, 0.005, 0.0001)) -> dict:
+                      density: float = 700.0, friction=(1.0, 0.005, 0.005),
+                      enabled: bool = True) -> dict:
     attrs = {
         "name": f"object_geom{index}",
         "type": geom_type,
@@ -244,6 +246,9 @@ def object_geom_attrs(index: int, geom_type: str, size, pos, euler=None, rgba=(0
         "solref": "0.005 1",
         "group": "2",
     }
+    if not enabled:
+        # A slot with no object in it must not collide and must not render.
+        attrs.update({"contype": "0", "conaffinity": "0", "rgba": "0 0 0 0"})
     if euler is not None and any(abs(e) > 1e-9 for e in euler):
         attrs["euler"] = _fmt(euler)
     return attrs
@@ -270,10 +275,14 @@ def _add_object_slots(world: ET.Element, opts: SceneOptions, n_slots: int) -> No
     ET.SubElement(body, "freejoint", name=OBJECT_FREEJOINT)
     for i in range(n_slots):
         # See SLOT_BOUND: deliberately over-sized so the compile-time BVH is
-        # conservative. density is tiny only to keep the placeholder mass sane;
-        # the real mass is written from the probe model before any stepping.
+        # conservative. They are compiled *disabled* -- non-colliding and
+        # invisible -- so a bare template is a valid empty tabletop scene that
+        # demo scripts and tests can use directly. A 0.30 m collidable cube
+        # sitting inside the table would otherwise blow the simulation up before
+        # the randomizer ever ran. SceneRandomizer enables the slots it fills.
         ET.SubElement(body, "geom",
-                      **object_geom_attrs(i, "box", (SLOT_BOUND,) * 3, (0.0, 0.0, 0.0), density=1.0))
+                      **object_geom_attrs(i, "box", (SLOT_BOUND,) * 3, (0.0, 0.0, 0.0),
+                                          density=1.0, enabled=False))
 
 
 def _base_tree(opts: SceneOptions) -> tuple[ET.Element, ET.Element]:
@@ -297,6 +306,21 @@ def _base_tree(opts: SceneOptions) -> tuple[ET.Element, ET.Element]:
 
     # Mount the arm on the plinth so its base is level with the table top.
     _find_body(root, "link0").set("pos", f"0 0 {TABLE_HEIGHT:.6g}")
+
+    # Gravity compensation on the arm bodies.
+    #
+    # The Menagerie actuators are pure position servos (affine bias, no integral
+    # term), so at steady state the joint torque must balance gravity and the arm
+    # settles *below* its setpoint. Measured droop was ~9 mm at the TCP, which is
+    # large next to a 25 mm object and made "descend to the grasp height" quietly
+    # inaccurate. A real Panda does not behave this way: the Franka control
+    # interface compensates gravity in firmware, and every torque a user command
+    # produces is on top of that. Setting gravcomp=1 on the arm links reproduces
+    # that, and is MuJoCo's built-in mechanism for it rather than a hand-rolled
+    # qfrc_applied hack. The payload is deliberately *not* compensated, so a
+    # grasped object still loads the arm.
+    for body_name in ARM_BODIES:
+        _find_body(root, body_name).set("gravcomp", "1")
 
     # IK target: a site rigidly attached to the hand at the fingertip-pad centre.
     hand = _find_body(root, "hand")

@@ -24,13 +24,33 @@ from .transforms import wrap_grasp_angle
 
 # Minimum distance below the object's top surface for the fingertip pads.
 GRASP_DEPTH = 0.012
-# Lowest TCP height above the table. The Panda fingertips reach ~9 mm below the
-# TCP site, so this keeps 5 mm of clearance between the tips and the table.
-MIN_TCP_HEIGHT = 0.014
+# Lowest TCP height above the table.
+#
+# The lowest collision point of the Panda gripper is measured (not assumed) at
+# 8.86 mm below the TCP site, so this leaves 2.1 mm of fingertip clearance.
+# Flat objects want this as small as possible -- the pad spans TCP-8 to TCP+9 mm,
+# so on a 20 mm tall L-shape every millimetre lower is another millimetre of pad
+# in contact, and oracle success on L-shapes rises monotonically from 46% at 5 mm
+# clearance to 71% at 0.1 mm. It is deliberately not pushed that far: 0.1 mm
+# clearance only works because the arm tracks to 0.5 mm in simulation, and a real
+# robot would drag its fingertips across the table. 2.1 mm is the honest choice,
+# and thin non-convex objects remain this project's hardest case.
+MIN_TCP_HEIGHT = 0.011
 # Deepest the TCP may sit below an object's top surface. The Panda hand body
 # starts ~43 mm above the TCP along the approach axis, so descending further than
 # this drives the hand itself into the top of a tall object.
 MAX_APPROACH_DEPTH = 0.035
+# How far *below* the object's mid-height to aim, in metres.
+#
+# Two effects both favour gripping low, and they were measured rather than
+# assumed. (1) The fingertip pad spans roughly TCP-8 mm to TCP+9 mm; on a 20 mm
+# tall object, centring the TCP at mid-height puts half the pad above the object
+# and wastes it. (2) On a curved object, contact above the widest cross-section
+# has normals that tilt outward, so a downward slip *loosens* the grip; below it,
+# the object wedges into a widening section and the grip tightens.
+# Calibrated by sweeping this value on episodes 3000+, disjoint from every seed
+# range used for reported results.
+GRIP_BIAS = 0.005
 # Extra opening added to the object width when pre-shaping, so the fingers clear
 # the object on the way down.
 PRESHAPE_CLEARANCE = 0.022
@@ -67,7 +87,8 @@ class Grasp:
 
 def grasp_z_from_surface(surface_z_world: float, table_z: float,
                          mid_z_world: float | None = None,
-                         depth: float = GRASP_DEPTH) -> float:
+                         depth: float = GRASP_DEPTH,
+                         bias: float | None = None) -> float:
     """TCP height for a grasp on a surface whose top is at ``surface_z_world``.
 
     The rule is "grip the object at its mid-height", subject to three limits:
@@ -89,9 +110,11 @@ def grasp_z_from_surface(surface_z_world: float, table_z: float,
     assumes the object fills the space between the table and its top surface --
     exactly right for the primitives here and a good approximation in general.
     """
+    if bias is None:
+        bias = GRIP_BIAS
     if mid_z_world is None:
         mid_z_world = 0.5 * (surface_z_world + table_z)
-    z = min(mid_z_world, surface_z_world - depth)
+    z = min(mid_z_world - bias, surface_z_world - depth)
     z = max(z, surface_z_world - MAX_APPROACH_DEPTH)
     return float(max(z, table_z + MIN_TCP_HEIGHT))
 

@@ -146,9 +146,6 @@ class SceneRandomizer:
         self.dof_adr = int(model.jnt_dofadr[joint_id])
         self.table_mat_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_MATERIAL, TABLE_MATERIAL)
         self.key_light_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_LIGHT, "key_light")
-        # Saved so a disabled slot can be restored exactly.
-        self._contype = model.geom_contype[self.geom_ids].copy()
-        self._conaffinity = model.geom_conaffinity[self.geom_ids].copy()
         self._clear_sameframe_fast_paths()
 
     def _clear_sameframe_fast_paths(self) -> None:
@@ -173,6 +170,14 @@ class SceneRandomizer:
         # body_simple selects a diagonal-mass-matrix fast path that assumes the
         # compile-time inertia; the object's inertia changes every episode.
         m.body_simple[self.body_id] = 0
+        # body_contype/body_conaffinity are the OR of the body's geoms, computed
+        # at compile time. The template's slots are compiled non-colliding so a
+        # bare template is a safe empty scene, which leaves this aggregate at 0 --
+        # and a body whose aggregate is 0 is dropped by the broad phase entirely,
+        # no matter what the per-geom masks say. Without this line every object
+        # falls straight through the table.
+        m.body_contype[self.body_id] = 1
+        m.body_conaffinity[self.body_id] = 1
 
     # -- object ------------------------------------------------------------- #
     def apply_object(self, data: mujoco.MjData, spec: ObjectSpec, probe: ObjectProbe,
@@ -191,8 +196,11 @@ class SceneRandomizer:
             m.geom_aabb[gid] = probe.geom_aabb[k]
             m.geom_rgba[gid] = spec.rgba
             m.geom_friction[gid] = spec.friction
-            m.geom_contype[gid] = self._contype[k]
-            m.geom_conaffinity[gid] = self._conaffinity[k]
+            # Set explicitly rather than restored from the compiled value: the
+            # template's slots are compiled non-colliding so that a bare template
+            # is a usable empty scene (see scene._add_object_slots).
+            m.geom_contype[gid] = 1
+            m.geom_conaffinity[gid] = 1
 
         for k in range(n, MAX_OBJECT_GEOMS):
             gid = self.geom_ids[k]
@@ -212,9 +220,14 @@ class SceneRandomizer:
         m.body_ipos[self.body_id] = probe.ipos
         m.body_iquat[self.body_id] = probe.iquat
 
-        self.set_object_pose(data, pos_xy, yaw, table_z)
-        # Recomputes body_subtreemass, dof_M0 and friends from the new masses.
+        # mj_setConst recomputes body_subtreemass, dof_M0 and friends from the
+        # new masses -- and, as a side effect, copies model.qpos0 back into
+        # data.qpos. So it must run *before* the pose is written, or the object
+        # silently ends up at the template's compile-time pose instead of where
+        # the caller asked for.
         mujoco.mj_setConst(m, data)
+        self.set_object_pose(data, pos_xy, yaw, table_z)
+        mujoco.mj_forward(m, data)
 
     def set_object_pose(self, data: mujoco.MjData, pos_xy: tuple[float, float], yaw: float,
                         table_z: float = TABLE_HEIGHT) -> None:

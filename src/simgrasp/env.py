@@ -275,11 +275,11 @@ class PandaGraspEnv:
 
         ctrl.set_gripper(grasp.preshape_width(), duration=0.3, hook=hook)
         ctrl.move_to_joint(pre.qpos, duration=1.3, hook=hook)
-        approach_err = ctrl.hold_until_converged(approach, mat, tol=2e-3, max_time=0.5, hook=hook)
+        approach_err = ctrl.hold_until_converged(approach, mat, tol=1e-3, max_time=0.5, hook=hook)
         # Descend, then wait for the servo to actually arrive before closing --
         # see CartesianController.hold_until_converged for why this matters.
         ctrl.move_to_pose(target, mat, duration=0.9, cartesian=True, waypoints=8, hook=hook,
-                          converge_tol=1.2e-3, converge_time=0.8)
+                          converge_tol=6e-4, converge_time=0.8)
         descend_err = ctrl.last_convergence_error
         ctrl.close_gripper(duration=0.8, hook=hook)
 

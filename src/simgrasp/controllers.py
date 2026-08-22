@@ -107,8 +107,8 @@ def solve_ik(
     q_init: np.ndarray | None = None,
     *,
     max_iters: int = 120,
-    pos_tol: float = 1e-3,
-    rot_tol: float = 1e-2,
+    pos_tol: float = 3e-4,
+    rot_tol: float = 5e-3,
     damping: float = 5e-2,
     step_scale: float = 0.7,
     null_gain: float = 0.05,
@@ -153,9 +153,18 @@ def solve_ik(
 
         # Null-space posture bias: keeps the redundant DOF near the nominal pose
         # so consecutive waypoints stay on the same IK branch.
+        #
+        # The projector is built from the *damped* pseudo-inverse, which is not
+        # exactly (I - J^+ J): with damping it leaks a little into task space. Far
+        # from the target that is harmless, but at convergence the leak fights the
+        # task error and the solver stalls -- measured, it floored out at 0.78 mm
+        # no matter how many iterations it was given. Fading the bias out as the
+        # error shrinks keeps the branch-selection benefit and removes the floor.
         if null_gain > 0.0:
-            j_pinv = jac.T @ np.linalg.solve(jjt, np.eye(6))
-            dq += (np.eye(7) - j_pinv @ jac) @ (null_gain * (q_nom - q))
+            fade = min(1.0, pos_err / 0.01)
+            if fade > 1e-3:
+                j_pinv = jac.T @ np.linalg.solve(jjt, np.eye(6))
+                dq += (np.eye(7) - j_pinv @ jac) @ (fade * null_gain * (q_nom - q))
 
         # Trust region: cap the per-iteration joint step so large targets do not
         # take a wild first step through a singularity.
@@ -201,7 +210,7 @@ class CartesianController:
     def settle(self, seconds: float = 0.2, hook: StepHook | None = None) -> None:
         self.step(int(round(seconds / self.dt)), hook)
 
-    def hold_until_converged(self, target_pos, target_mat=None, *, tol: float = 1.5e-3,
+    def hold_until_converged(self, target_pos, target_mat=None, *, tol: float = 5e-4,
                              max_time: float = 0.6, hook: StepHook | None = None) -> float:
         """Hold the current setpoint until the TCP actually gets there.
 
@@ -244,7 +253,7 @@ class CartesianController:
 
     def move_to_pose(self, pos, mat, duration: float = 1.0, cartesian: bool = False,
                      waypoints: int = 12, hook: StepHook | None = None,
-                     converge: bool = True, converge_tol: float = 1.5e-3,
+                     converge: bool = True, converge_tol: float = 5e-4,
                      converge_time: float = 0.6) -> IKResult:
         """Move the TCP to ``(pos, mat)``.
 
