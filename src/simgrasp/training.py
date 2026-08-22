@@ -28,7 +28,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 
 from .data import GraspDataset
 from .models import ANGLE_BINS, GraspNet, angle_to_bin

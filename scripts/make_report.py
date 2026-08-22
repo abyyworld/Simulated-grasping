@@ -96,7 +96,7 @@ def training_section(run_dir: Path) -> list[str]:
     hist = summary["history"]
     row = next((h for h in hist if h["epoch"] == best["epoch"]), hist[-1] if hist else {})
     lines = ["## Training", "",
-             f"| setting | value |", "|---|---|",
+             "| setting | value |", "|---|---|",
              f"| dataset | `{cfg['data']}` ({summary.get('n_train', '?')} training samples) |",
              f"| input | {'height + RGB (4 ch)' if cfg['use_rgb'] else 'height only (1 ch)'} |",
              f"| epochs | {cfg['epochs']} |",
@@ -133,7 +133,7 @@ def headline_table(results: Path) -> list[str]:
     if not rows:
         return []
     n = load(results / "baseline" / "oracle.json")["n"]
-    return ([f"| policy | seen categories | held-out categories | drop | |",
+    return (["| policy | seen categories | held-out categories | drop | |",
              "|---|---|---|---|---|"] + rows +
             ["", f"*n = {n} trials, identical scenes for every policy.*"])
 

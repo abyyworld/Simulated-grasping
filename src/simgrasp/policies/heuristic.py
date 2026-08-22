@@ -27,9 +27,15 @@ class HeuristicPolicy:
     name = "heuristic"
 
     def __init__(self, snap_to_object: bool = True):
-        # When the centroid falls off the object (non-convex shapes), optionally
-        # snap to the nearest object pixel. Off by default in the reported
-        # baseline so the failure mode stays visible in the numbers.
+        """
+        snap_to_object:
+            On a non-convex shape the silhouette centroid can fall *off* the
+            object entirely -- the inside corner of an L is the clearest case.
+            When enabled (the default, and what the reported baseline uses) the
+            grasp point snaps to the nearest object pixel, which is what any
+            competent hand-written script would do. Disable it to see the raw
+            failure mode.
+        """
         self.snap_to_object = snap_to_object
 
     def __call__(self, obs: Observation, env: PandaGraspEnv,

@@ -94,6 +94,26 @@ def test_oracle_lifts_a_simple_object(env):
     assert result.lift_height > 0.08
 
 
+def test_unstable_episodes_are_reported_not_scored(env, monkeypatch):
+    """A diverged solve must be flagged, never turned into a training label."""
+    import mujoco
+
+    env.reset(0, category="box")
+    grasp = env.oracle_grasp()
+    monkeypatch.setattr(type(env), "_is_unstable", lambda self: True)
+    result = env.execute(grasp)
+    assert result.reason == "unstable"
+    assert not result.success
+    assert result.lift_height == 0.0
+    del mujoco
+
+
+def test_stability_check_is_clean_on_a_normal_episode(env):
+    env.reset(0, category="box")
+    env.execute(env.oracle_grasp())
+    assert not env._is_unstable()
+
+
 def test_execute_requires_reset():
     from simgrasp.env import PandaGraspEnv
     e = PandaGraspEnv(image_size=64)

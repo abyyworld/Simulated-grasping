@@ -129,7 +129,7 @@ def solve_ik(
     pos_err = rot_err = np.inf
     it = 0
 
-    for it in range(1, max_iters + 1):
+    for it in range(1, max_iters + 1):  # noqa: B007 - `it` is the returned iteration count
         data.qpos[arm.qpos_adr] = q
         mujoco.mj_kinematics(model, data)
         mujoco.mj_comPos(model, data)

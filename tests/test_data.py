@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass
 
 import numpy as np
-import pytest
 import torch
 
 from simgrasp.data import GraspDataset, ShardWriter

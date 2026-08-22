@@ -258,6 +258,7 @@ class PandaGraspEnv:
         st = self._require_state()
         ctrl = self.controller
         ctrl.ik_failures = 0
+        self._clear_warnings()
 
         hook = self._make_step_hook(frame_hook, frame_every)
         mat = topdown_grasp_mat(grasp.yaw)
@@ -290,6 +291,14 @@ class PandaGraspEnv:
                           converge=False)
         ctrl.settle(0.4, hook=hook)
 
+        if self._is_unstable():
+            # MuJoCo reported a non-finite acceleration: the contact solver
+            # diverged, usually from an object wedged hard between the fingers
+            # and the table. Roughly 1 episode in 3000. Anything read out of this
+            # state is meaningless, so it is reported rather than scored -- the
+            # collector drops these instead of writing a mislabelled sample.
+            return GraspResult(False, "unstable", grasp, ik_failures=ctrl.ik_failures)
+
         pos, _ = self.randomizer.object_pose(self.data)
         lift = float(pos[2] - st.object_z0)
         width = self.arm.gripper_width(self.data)
@@ -316,6 +325,17 @@ class PandaGraspEnv:
             ik_failures=ctrl.ik_failures,
             info={"approach_err": float(approach_err), "descend_err": float(descend_err)},
         )
+
+    def _clear_warnings(self) -> None:
+        for i in range(len(self.data.warning)):
+            self.data.warning[i].number = 0
+
+    def _is_unstable(self) -> bool:
+        bad = (mujoco.mjtWarning.mjWARN_BADQACC, mujoco.mjtWarning.mjWARN_BADQVEL,
+               mujoco.mjtWarning.mjWARN_BADQPOS, mujoco.mjtWarning.mjWARN_BADCTRL)
+        if any(self.data.warning[int(w)].number for w in bad):
+            return True
+        return not (np.all(np.isfinite(self.data.qpos)) and np.all(np.isfinite(self.data.qvel)))
 
     def _make_step_hook(self, frame_hook: FrameHook | None, frame_every: int):
         if frame_hook is None:

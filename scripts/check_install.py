@@ -49,9 +49,10 @@ def main() -> int:
 
     def _render():
         import mujoco
+
         from simgrasp.camera import RGBDCamera
-        from simgrasp.scene import CAPTURE_QPOS, OVERHEAD_CAM
         from simgrasp.controllers import CartesianController
+        from simgrasp.scene import CAPTURE_QPOS, OVERHEAD_CAM
         m = globals()["_model"]
         d = mujoco.MjData(m)
         CartesianController(m, d).reset_to(CAPTURE_QPOS)
@@ -62,6 +63,7 @@ def main() -> int:
 
     def _ik():
         import mujoco
+
         from simgrasp.controllers import ArmInterface, solve_ik
         from simgrasp.scene import HOME_QPOS, TABLE_HEIGHT
         from simgrasp.transforms import topdown_grasp_mat
@@ -87,6 +89,7 @@ def main() -> int:
 
     def _torch():
         import torch
+
         from simgrasp.models import pick_device
         return f"torch {torch.__version__}, device '{pick_device()}'"
 

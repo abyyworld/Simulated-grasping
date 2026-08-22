@@ -62,8 +62,8 @@ def make_figure(args) -> None:
 
     from simgrasp.camera import project_points
     from simgrasp.env import PandaGraspEnv
-    from simgrasp.paths import MEDIA_DIR
     from simgrasp.objects import SEEN_CATEGORIES
+    from simgrasp.paths import MEDIA_DIR
     from simgrasp.policies.learned import LearnedPolicy
     from simgrasp.seeding import rng_for_episode
 

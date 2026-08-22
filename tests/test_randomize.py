@@ -36,7 +36,7 @@ from simgrasp.scene import (
     build_template_model,
     randomize_scene_options,
 )
-from simgrasp.transforms import quat_to_mat, rotation_error
+from simgrasp.transforms import quat_to_mat
 
 GEOM_FIELDS = [
     "geom_type", "geom_size", "geom_pos", "geom_quat", "geom_rbound", "geom_aabb",

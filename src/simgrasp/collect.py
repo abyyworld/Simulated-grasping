@@ -15,7 +15,7 @@ import multiprocessing as mp
 import platform
 import subprocess
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -77,7 +77,7 @@ def collect_worker(
 ) -> dict[str, Any]:
     """Run ``episodes`` in this process, writing shards under ``w{worker_id}``."""
     sampler = GraspSampler(**(sampler_kwargs or {}))
-    stats = {"n": 0, "successes": 0, "by_category": {}, "by_mode": {}}
+    stats = {"n": 0, "successes": 0, "unstable": 0, "by_category": {}, "by_mode": {}}
     t0 = time.perf_counter()
 
     with PandaGraspEnv(image_size=image_size, base_seed=base_seed) as env, \
@@ -88,6 +88,10 @@ def collect_worker(
             rng = rng_for_episode(base_seed + 7_777_777, ep)
             grasp = sampler(obs, env, rng)
             result = env.execute(grasp)
+            if result.reason == "unstable":
+                # The physics diverged; the outcome is not a real label.
+                stats["unstable"] = stats.get("unstable", 0) + 1
+                continue
             img = grasp_to_image(grasp, obs.cam_pos, obs.cam_mat, obs.intrinsics)
             st = env.state
             assert st is not None
@@ -169,10 +173,11 @@ def collect_dataset(
 
 
 def _merge_stats(parts: list[dict[str, Any]]) -> dict[str, Any]:
-    out = {"n": 0, "successes": 0, "by_category": {}, "by_mode": {}}
+    out = {"n": 0, "successes": 0, "unstable": 0, "by_category": {}, "by_mode": {}}
     for p in parts:
         out["n"] += p["n"]
         out["successes"] += p["successes"]
+        out["unstable"] += p.get("unstable", 0)
         for key in ("by_category", "by_mode"):
             for k, (n, s) in p[key].items():
                 cur = out[key].setdefault(k, [0, 0])
