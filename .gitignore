@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Vendored simulation assets (fetched by `make assets`)
+assets/franka_emika_panda/
+
+# Generated data / runs / media
+data/
+runs/
+media/*.mp4
+media/*.gif
+!media/.gitkeep
+outputs/
+*.npy
+*.npz
+*.pt
+*.ckpt
+
+# OS
+.DS_Store

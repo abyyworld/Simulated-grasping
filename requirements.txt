@@ -1,0 +1,13 @@
+# Pinned-ish runtime requirements. `pip install -e .` reads pyproject.toml instead;
+# this file exists so `pip install -r requirements.txt` works without the package.
+mujoco>=3.2,<4.0
+numpy>=1.24
+torch>=2.1
+torchvision>=0.16
+opencv-python-headless>=4.8
+imageio>=2.31
+imageio-ffmpeg>=0.4.9
+pyyaml>=6.0
+tqdm>=4.65
+matplotlib>=3.7
+pytest>=7.4
