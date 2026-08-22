@@ -192,6 +192,37 @@ half turn) turns this into classification over `(u, v, angle_bin)`, where a
 failure is a clean negative for exactly the cell that was tried. Inference is an
 argmax over the whole volume in one forward pass.
 
+### It did not work, and here is the measurement
+
+The formulation is sound but the *supervision density* defeats it. Measured on
+the trained model:
+
+| | value | reference |
+|---|---|---|
+| mean grasp-angle error, determinate shapes | 46.5° | 45° = random guessing |
+| per-angle quality spread at the chosen pixel | 0.026 | 0 = fully collapsed |
+
+Position is learned well — the predicted pixel lands within 1–2 px of the object
+and predicted quality is ~0 everywhere else — but orientation is not learned at
+all. The reason is arithmetic: one episode supervises one `(pixel, angle_bin)`
+cell out of `224 × 224 × 12`, so at any object pixel eleven of twelve bins never
+receive a gradient. Predicting the angle-marginal success probability is then a
+loss minimum, and that is exactly what the network converges to.
+
+It matters, too. Sweeping the executed grasp angle away from the oracle:
+
+| offset | capsule | l_shape | cylinder |
+|---|---|---|---|
+| 0° | 88% | 50% | 100% |
+| 45° | 62% | 50% | 100% |
+| 90° | **12%** | **12%** | 100% |
+
+The cylinder row is the control: a rotationally symmetric object should be flat,
+and is.
+
+**Rotation augmentation** was added to attack this (§10). It helped, but did not
+solve it.
+
 ### Free negatives
 
 Each episode yields one executed label — 10 000 supervised cells out of
@@ -261,7 +292,40 @@ imports Triton.
 
 ---
 
-## 9. Known limitations
+## 9. Ablation: rotation augmentation
+
+A grasp label is equivariant to image rotation, so rotating a training image and
+carrying the label with it multiplies the effective angle coverage without
+simulating another episode. Two runs, identical in data, architecture, schedule
+and seed, differing only in this:
+
+| | no rotation | with rotation |
+|---|---|---|
+| best validation AP | 0.807 | **0.822** |
+| capsule angle error | 55.0° | **37.1°** |
+| angle error, all determinate shapes | 47.6° | 46.5° |
+
+So it is a real but partial win: it improves quality prediction outright, and it
+clearly helps on the single most elongated category, but averaged over all shapes
+with a determinate grasp axis the model is still at chance. Four categories
+improve, three get worse. Both checkpoints are kept (`runs/grasp_cnn_norot`) so
+the comparison is inspectable rather than asserted.
+
+Two process notes worth more than the result:
+
+* **The first version of the metric hid the effect.** It averaged angle error
+  over every category, including rotationally symmetric ones where every angle is
+  correct and near-square boxes where the oracle's choice is arbitrary. That
+  reported "no difference" where the per-category numbers showed 55° → 37° on
+  capsules. The metric now filters by *shape*, per episode.
+* **An early reading of the same quantity was noise.** At epoch 0 the rotation
+  model showed ~7x more per-bin spread, which looked like a decisive win; it was
+  an untrained network producing unsmoothed outputs. Only the converged
+  comparison means anything.
+
+---
+
+## 10. Known limitations
 
 * **Single object, clean table.** No clutter, no occlusion, no bin. This is why
   the depth-only heuristic baseline is strong: with one isolated object, the
@@ -275,3 +339,10 @@ imports Triton.
   of these numbers should not be assumed.
 * **Open-loop execution.** The controller does not react to contact during the
   grasp, which is what makes thin non-convex objects the failure mode they are.
+* **The learned policy is the weakest part of this project.** It loses to the
+  depth heuristic, 66.5% to 82.5%, for the reasons in §6 and in the README's
+  failure analysis. The simulation, the data pipeline, the evaluation harness and
+  the baselines are the parts that are solid.
+* **RGB is often close to blown out** under the sampled lighting, so the colour
+  channels probably contribute less than intended and the network is effectively
+  depth-driven. Narrowing the light-intensity range is a cheap thing to try.

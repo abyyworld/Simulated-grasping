@@ -16,6 +16,14 @@ The point of the project is the **generalisation gap**: the network trains only
 on convex primitives (box, cylinder, capsule, sphere) and is evaluated on shapes
 that share no topology with them (ellipsoid, L, T, mug, dumbbell).
 
+> **Read the results before the pitch.** In the reference run below the learned
+> policy **loses to a hand-written depth heuristic**, 66.5% against 82.5%. That
+> is the honest state of it, the causes are measured rather than guessed, and
+> they are written up in [Failure analysis](#failure-analysis). The simulation,
+> the data pipeline and the evaluation are solid; the model is the weak part, and
+> the reference checkpoint was trained at half resolution on a laptop CPU because
+> that is the hardware this was built on.
+
 ---
 
 ## Quick start
@@ -150,8 +158,9 @@ Full tables, regenerated from the run artefacts, in **[docs/results.md](docs/res
 
 | policy | seen categories | held-out categories | drop | |
 |---|---|---|---|---|
-| Oracle (ground-truth pose) | 98.9% | 81.4% | +17.4 pp | upper bound: perfect perception |
-| Heuristic (depth centroid + PCA) | 90.8% | 78.8% | +12.0 pp | no learning, depth only |
+| Oracle (ground-truth pose) | 95.5% | 79.8% | +15.7 pp | upper bound: perfect perception |
+| Heuristic (depth centroid + PCA) | 88.3% | 75.3% | +13.0 pp | no learning, depth only |
+| **CNN (ours)** | 78.4% | 51.7% | +26.7 pp | one RGB-D image, one forward pass |
 
 *n = 200 trials, identical scenes for every policy.*
 
@@ -161,6 +170,16 @@ Read the **gap**, not the absolute rates. These are primitive shapes on a clean
 table with a noiseless depth camera, so absolute success is optimistic relative
 to a real robot; the seen-versus-held-out difference is the number that means
 something.
+
+<p align="center">
+  <img src="media/predictions.png" alt="Predicted grasp quality maps with executed grasps overlaid" width="820">
+</p>
+
+The rightmost pair of columns is the clearest single picture of what the network
+got wrong: on a dumbbell it puts both quality peaks on the **end balls** rather
+than the shaft between them, and closes on empty air. It learned "grasp compact
+blobs" from a training set of boxes, cylinders, capsules and spheres, and applied
+that prior to a shape where it does not hold.
 
 ---
 
@@ -254,8 +273,56 @@ Measured along the way (see [docs/design.md](docs/design.md)):
 
 ## Failure analysis
 
-Where the oracle still fails, and why — these are physics and controller limits,
-not perception limits, so they bound every policy above them:
+### Why the learned policy loses to the heuristic
+
+66.5% against 82.5%. Four measured causes, in order of how much they matter:
+
+1. **The angle head is at chance.** Mean error between the predicted grasp angle
+   and the oracle's is **46.5°** over shapes with a determinate grasp axis;
+   random guessing over a half-turn-symmetric gripper scores 45°. This is not a
+   subtlety of the task — sweeping the executed angle away from the oracle drops
+   capsule success from 88% to 12%, so a near-random angle is expensive.
+
+   The cause is structural. Each episode supervises exactly **one** of twelve
+   angle bins at **one** pixel, so at any object pixel eleven bins never receive
+   a gradient and the loss is minimised by predicting the angle-*marginal*
+   success rate. Half the training categories (cylinder, sphere) are rotationally
+   symmetric and carry no orientation signal at all.
+
+2. **`closed_empty` dominates its failures** — 53 of 200 trials, against 20 for
+   the oracle and 25 for the heuristic. The gripper arrives somewhere plausible
+   and closes on nothing, which is what a wrong angle or a few millimetres of
+   position error produces.
+
+3. **The reference checkpoint is under-trained by design.** 12 epochs at
+   112×112 on four CPU cores, no ImageNet initialisation. Half resolution
+   quantises grasp positions to 4.4 mm. On a GPU this should be 30 epochs at
+   224×224 with `--pretrained`; see [Quick start](#quick-start).
+
+4. **It transferred a shape prior that does not generalise.** The figure above
+   shows it peaking on a dumbbell's end balls instead of the shaft — sensible for
+   the convex blobs it trained on, wrong for a two-part object. Held-out success
+   is 51.7% against 75.3% for the heuristic, so the gap is worst exactly where
+   the project claims to be interesting.
+
+**What was tried.** Rotation augmentation (rotating training images and carrying
+the grasp label with them) was added specifically to attack cause 1. It improved
+validation AP from 0.807 to 0.822 and cut capsule angle error from 55° to 37°,
+but did **not** fix orientation overall — per-category results are mixed, four
+categories better and three worse. Both runs are kept so the comparison is
+visible rather than asserted: `runs/grasp_cnn_norot` is the ablation.
+
+**What would most likely fix it**, roughly in order of expected value: collect
+several grasp angles at the *same* point in each scene, so the data contains
+direct contrastive evidence about orientation rather than one bin per image;
+train at full resolution on a GPU with ImageNet initialisation; and add
+angle-informative categories to the training split, which is currently half
+rotationally symmetric.
+
+### Where the oracle still fails
+
+These are physics and controller limits, not perception limits, so they bound
+every policy above them:
 
 * **Thin non-convex objects (L, T) are the hardest case.** The fingertip pad
   spans TCP−8 mm to TCP+9 mm, so on a 20 mm-tall L-shape only part of the pad
