@@ -60,8 +60,11 @@ def make_figure(args) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    import cv2
+
     from simgrasp.camera import project_points
     from simgrasp.env import PandaGraspEnv
+    from simgrasp.heightmap import metres_per_pixel
     from simgrasp.objects import SEEN_CATEGORIES
     from simgrasp.paths import MEDIA_DIR
     from simgrasp.policies.learned import LearnedPolicy
@@ -79,8 +82,12 @@ def make_figure(args) -> None:
             obs = env.reset(ep)
             rng = rng_for_episode(args.seed + 1_000_003, ep)
             grasp = policy(obs, env, rng)
-            quality = policy.last_quality
-            best = quality.max(axis=0)
+            # The network may run at a lower resolution than the observation
+            # (--input-size), so put its map back on the image grid before
+            # overlaying anything in image pixels.
+            best = policy.last_quality.max(axis=0)
+            if best.shape != obs.height.shape:
+                best = cv2.resize(best, obs.height.shape[::-1], interpolation=cv2.INTER_LINEAR)
             uv, _ = project_points(grasp.position, obs.cam_pos, obs.cam_mat, obs.intrinsics)
             result = env.execute(grasp)
 
@@ -92,7 +99,10 @@ def make_figure(args) -> None:
             im = axes[2, col].imshow(np.clip(best, 0, 1), cmap="inferno", vmin=0, vmax=1)
             axes[2, col].set_title(f"grasp quality\n{result.reason}", fontsize=9)
 
-            half = 0.5 * grasp.width / 0.00219
+            # Convert the jaw width to pixels through the real intrinsics rather
+            # than a hard-coded ground sampling distance.
+            mpp = metres_per_pixel(obs.intrinsics, float(obs.cam_pos[2] - grasp.z))
+            half = 0.5 * grasp.width / mpp
             dx, dy = np.cos(-grasp.yaw) * half, np.sin(-grasp.yaw) * half
             for ax in axes[:, col]:
                 ax.plot([uv[0] - dx, uv[0] + dx], [uv[1] - dy, uv[1] + dy],
