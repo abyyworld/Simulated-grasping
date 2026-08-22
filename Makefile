@@ -21,6 +21,7 @@ WORKERS  ?= 4
 EPISODES ?= 10000
 DATA     ?= data/grasp10k
 RUN      ?= runs/grasp_cnn
+ABLATION ?= runs/grasp_cnn_norot
 TRIALS   ?= 200
 
 .PHONY: help install assets check baseline dataset train evaluate media report results test lint clean all
@@ -74,13 +75,15 @@ report:
 	$(PY) scripts/make_report.py --run $(RUN)
 
 # Everything that turns a trained checkpoint into published numbers.
+# The angle step is skipped automatically if the ablation checkpoint is absent.
 results:
 	$(PY) scripts/run_baseline.py --episodes $(TRIALS) --workers $(WORKERS) \
 		--policies oracle heuristic cnn --checkpoint $(RUN)/best.pt
 	$(PY) scripts/evaluate.py --episodes $(TRIALS) --workers $(WORKERS) \
 		--checkpoint $(RUN)/best.pt
+	-$(PY) scripts/angle_ablation.py --checkpoints $(ABLATION)/best.pt $(RUN)/best.pt
 	$(PY) scripts/make_media.py --figure --checkpoint $(RUN)/best.pt
-	$(PY) scripts/make_report.py --run $(RUN)
+	$(PY) scripts/make_report.py --run $(RUN) --ablation $(ABLATION)
 
 test:
 	$(PY) -m pytest tests/ -q
