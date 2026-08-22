@@ -30,6 +30,10 @@ outputs/
 # MuJoCo writes this wherever it is run from.
 MUJOCO_LOG.TXT
 
+# Private notes, never published.
+EXPLAIN-THIS-PROJECT.private.md
+.private/
+
 # OS
 .DS_Store
 .simgrasp_gl_backend
