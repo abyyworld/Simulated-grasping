@@ -43,7 +43,7 @@ def main() -> int:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    table: dict[str, dict[str, float]] = {}
+    table: dict[str, dict[str, object]] = {}
 
     for name in args.policies:
         kwargs = {"checkpoint": args.checkpoint} if name == "cnn" else None
@@ -62,8 +62,8 @@ def main() -> int:
     print(f"{'policy':<14}{'seen':>12}{'held-out':>12}{'gap':>10}")
     print("-" * 66)
     for name, row in table.items():
-        gap = row["seen"] - row["unseen"]
-        print(f"{name:<14}{row['seen']:>11.1%}{row['unseen']:>12.1%}{gap:>10.1f}pp")
+        gap = (row["seen"] - row["unseen"]) * 100.0  # percentage points
+        print(f"{name:<14}{row['seen']:>11.1%}{row['unseen']:>12.1%}{gap:>9.1f}pp")
     print("=" * 66)
     print(f"n = {args.episodes} episodes per cell")
 
