@@ -408,12 +408,16 @@ What it has established so far, on a MuJoCo arm run entirely on CPU:
   success rate is a minimum of this loss, and more data finds it more reliably.
   That is the mechanism this README already identified, now measured against
   data volume.
-* **The run-to-run noise is larger than the effect.** Retraining at a fixed
-  dataset size moves held-out success by about 2.3 points; doubling the data
-  moves it by 1.1. That decomposition (2.66 points of total scatter, 1.29 of it
-  binomial evaluation noise at n=1500, the rest training variance) is the honest
-  reason the question is hard to settle, and it is a property of this setup
-  rather than of the simulator.
+* **The run-to-run noise is comparable to the whole effect, measured directly.**
+  Three training seeds at three dataset sizes, identical data and identical
+  evaluation scenes, give 3.29 points of standard deviation from nothing but the
+  seed. At 1,536 grasps three runs of the identical experiment returned 44.7%,
+  50.2% and 55.7%. Meanwhile the entire 32x increase in data moved held-out
+  success by 6.1 points, so the effect being measured is about 1.8 standard
+  deviations of free noise. That is a property of this training setup rather
+  than of the simulator, and it is the sharpest thing the follow-up establishes:
+  **a single-seed scaling curve at this scale is mostly measuring its own
+  noise.**
 * **It has not yet reached this project's scale.** Its largest point is 12,288
   samples against roughly 27,000 here, and the 58.4% reported above sits above
   everything on its curve. The curve therefore continues upward past where that
