@@ -384,15 +384,23 @@ What it has established so far, on a MuJoCo arm run entirely on CPU:
   they are not the same number and the more precise one is the bar to beat.
   Nothing in the environment has moved; the original measurement was simply
   noisier than its two significant figures suggest.
-* **Across 384 to 6,144 labelled grasps, held-out success is consistent with
-  flat.** At 1,500 evaluation episodes per split it fits at +1.3 points per
-  doubling with a 95% interval of -1.7 to +4.3. The useful half is the upper
+* **Across 384 to 12,288 labelled grasps, held-out success is consistent with
+  flat.** Six points, 1,500 evaluation episodes each, fitting at +1.1 points per
+  doubling with a 95% interval of -0.7 to +2.8. The useful half is the upper
   end: whatever more data buys on unseen shapes over this range, it is at most
-  4.3 points per doubling, and the 31 point distance to the control would take
-  about seven further doublings even at that rate.
-* **Orientation stayed at chance the whole way**, within 1.8 degrees of the 45
-  degrees a random guess scores, at every training set size, on both splits.
-  Scored on 59 seen and 167 held-out grasps per point.
+  2.8 points per doubling, and the 30 point distance to the control would take
+  about eleven further doublings even at that rate.
+* **Orientation does improve with data, and the rate is the answer.** This is
+  the one trend the study resolves: held-out orientation error falls 0.74
+  degrees per doubling, 95% interval 0.08 to 1.39, excluding zero. But it goes
+  from 46.5 degrees to only 42.6 across the whole 32x range, against the 45 a
+  random guess scores, and never gets more than 2.4 degrees from chance.
+  Reaching the 35.2 degrees this project achieved on seen categories after the
+  contrastive-label fix would take about ten further doublings at the fitted
+  rate, five at the fastest end of the interval: half a million to twelve
+  million labelled grasps. The lower end is reachable with a GPU simulator. The
+  upper end is not, and that asymmetry is the case for suspecting the
+  architecture.
 * **The network got less sensitive to orientation as data grew, not more.** The
   bin spread, the range of predicted quality across the twelve gripper angles at
   the chosen pixel, fell from 0.41 to 0.05 across the curve, settling near the
@@ -401,12 +409,12 @@ What it has established so far, on a MuJoCo arm run entirely on CPU:
   That is the mechanism this README already identified, now measured against
   data volume.
 * **The run-to-run noise is larger than the effect.** Retraining at a fixed
-  dataset size moves held-out success by about 2.7 points; doubling the data
-  moves it by 1.3. That decomposition (2.99 points of total scatter, 1.29 of it
+  dataset size moves held-out success by about 2.3 points; doubling the data
+  moves it by 1.1. That decomposition (2.66 points of total scatter, 1.29 of it
   binomial evaluation noise at n=1500, the rest training variance) is the honest
   reason the question is hard to settle, and it is a property of this setup
   rather than of the simulator.
-* **It has not yet reached this project's scale.** Its largest point is 6,144
+* **It has not yet reached this project's scale.** Its largest point is 12,288
   samples against roughly 27,000 here, and the 58.4% reported above sits above
   everything on its curve. The curve therefore continues upward past where that
   arm reached, and none of this is evidence that more data cannot help. It is
