@@ -13,15 +13,22 @@ venv/
 # Vendored simulation assets (fetched by `make assets`)
 assets/franka_emika_panda/
 
-# Generated data / runs / media
-data/
-runs/
+# Generated data / runs / media.
+#
+# These are anchored with a leading slash so they match only the directories at
+# the repository root. Without the anchor, "data/" also matched
+# src/simgrasp/data/, and that package was silently excluded from every commit:
+# the published repository could not import simgrasp at all. See
+# tests/test_repo_integrity.py, which now fails if any tracked source directory
+# becomes ignored.
+/data/
+/runs/
 media/*
 # ...except the two assets the README embeds, which must ship with the repo.
 !media/.gitkeep
 !media/grasp_demo.gif
 !media/predictions.png
-outputs/
+/outputs/
 *.npy
 *.npz
 *.pt
