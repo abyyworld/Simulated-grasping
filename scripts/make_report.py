@@ -20,7 +20,7 @@ def _pct(x) -> str:
 
 
 def _ci(lo, hi) -> str:
-    return f"{lo * 100:.0f}–{hi * 100:.0f}%"
+    return f"{lo * 100:.0f} to {hi * 100:.0f}%"
 
 
 def load(path: Path) -> dict | None:
@@ -58,7 +58,7 @@ def baseline_section(results: Path) -> list[str]:
         cells = []
         for _k, _lbl, s in loaded:
             row = s["by_category"].get(cat)
-            cells.append(f"{_pct(row['rate'])} ({row['n']})" if row else "–")
+            cells.append(f"{_pct(row['rate'])} ({row['n']})" if row else "not measured")
         lines.append(f"| `{cat}` | {split} | " + " | ".join(cells) + " |")
 
     lines += ["", "### Failure modes", "",
@@ -112,8 +112,8 @@ def ablation_section(run_dir: Path, ablation_dir: Path) -> list[str]:
               "Executing several grasps at the *same point* at different orientations is "
               "the change that works: it makes the labels impossible to explain with a "
               "function of the pixel alone. Seen-category angle error falls from 55° "
-              "(worse than chance) to 35°. It does **not** transfer — held-out shapes stay "
-              "at chance — so the network learned the orientation rule for the shapes it "
+              "(worse than chance) to 35°. It does **not** transfer: held-out shapes stay "
+              "at chance, so the network learned the orientation rule for the shapes it "
               "saw rather than a general one.", ""]
     return lines
 

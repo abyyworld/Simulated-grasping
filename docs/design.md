@@ -18,7 +18,7 @@ and recompile. Profiled on a laptop CPU, that costs:
 
 So over 10 000 episodes the *setup* costs about an hour per worker while the
 actual simulation costs eleven minutes. Worse, repeatedly creating and
-destroying render contexts leaked roughly 25 MB per episode — enough to run a
+destroying render contexts leaked roughly 25 MB per episode, enough to run a
 16 GB laptop out of memory partway through a collection run.
 
 `simgrasp.randomize` instead compiles one template per process and writes the
@@ -29,27 +29,27 @@ fields. That costs ~1 ms and allocates nothing.
 
 MuJoCo derives a lot at **compile** time, and writing the underlying field at
 runtime does not refresh the derived value. Three separate instances of this bit
-during development, and **not one of them raised an error** — each produced a
+during development, and **not one of them raised an error**. Each produced a
 plausible-looking simulation that was quietly wrong:
 
-1. **`bvh_aabb`** — MuJoCo builds a per-body bounding-volume hierarchy used by
+1. **`bvh_aabb`**. MuJoCo builds a per-body bounding-volume hierarchy used by
    the mid-phase to cull geom pairs. It still bounded the placeholder geoms, so
    real contacts were culled and objects sank through the table with `ncon == 0`.
    *Fix:* compile the placeholder slots deliberately **over-sized**
-   (`scene.SLOT_BOUND`). A too-large AABB is conservative — it can admit extra
+   (`scene.SLOT_BOUND`). A too-large AABB is conservative: it can admit extra
    narrow-phase tests but never miss a contact. The per-geom `geom_rbound` used
    by the broad phase *is* refreshed from the probe model, so the cheap filter
    stays tight. Rebuilding the hierarchy by hand was rejected: its layout is
    internal, uses a rotated per-node frame, and is undocumented.
 
-2. **`geom_sameframe` / `body_sameframe`** — set by the compiler when a geom's
+2. **`geom_sameframe` / `body_sameframe`**, set by the compiler when a geom's
    local pose is the identity, or a body's inertial frame coincides with its body
    frame. `mj_kinematics` then skips the local transform entirely, so writes to
    `geom_pos`, `geom_quat`, `body_ipos` and `body_iquat` were silently discarded
    and every geom collided as though it sat at the body origin.
    *Fix:* clear the flags for the object body.
 
-3. **`body_contype` / `body_conaffinity`** — the OR over a body's geoms.
+3. **`body_contype` / `body_conaffinity`**, the OR over a body's geoms.
    Compiling the slots non-colliding (so a bare template is a safe empty scene)
    left the aggregate at zero, and a body whose aggregate is zero is dropped by
    the broad phase no matter what the per-geom masks say. Every object free-fell
@@ -64,7 +64,7 @@ nine categories. That test is the reason this optimisation is safe to keep.
 
 Changing `geom_size` does not update `body_mass` or `body_inertia`; the compiler
 derives those. Rather than hand-code inertia tensors for boxes, cylinders,
-capsules, spheres and ellipsoids — and get the capsule wrong, as everyone does —
+capsules, spheres and ellipsoids, and get the capsule wrong as everyone does,
 `randomize.probe_object` compiles a **throwaway model containing only the
 object's geoms** and reads MuJoCo's own answer back out. It costs ~0.6 ms, is
 correct by construction, and also yields `geom_rbound` and `geom_aabb`.
@@ -72,7 +72,7 @@ correct by construction, and also yields `geom_rbound` and `geom_aabb`.
 One trap: MJCF defaults to **degrees**. The probe model omitted
 `<compiler angle="radian"/>`, so a capsule's `pi/2` euler was parsed as 1.57
 degrees. The result was a near-upright capsule with the wrong rotational
-inertia — again, no error.
+inertia. Again, no error.
 
 ---
 
@@ -83,8 +83,8 @@ integral term, so at steady state the joint torque must balance gravity and the
 arm settles *below* its setpoint. Measured: **8.8 mm** of TCP droop and 1.9 mrad
 per joint.
 
-A real Panda does not behave this way — the Franka control interface compensates
-gravity in firmware — so the arm links carry `gravcomp="1"`. TCP error drops to
+A real Panda does not behave this way, because the Franka control interface
+compensates gravity in firmware, so the arm links carry `gravcomp="1"`. TCP error drops to
 0.50 mm and joint error to 0.08 mrad.
 
 Turning it on initially *lowered* oracle success from 85% to 80%. That was
@@ -123,8 +123,8 @@ three limits: at least 12 mm below the top surface (so the pads bite the side,
 not the top face), at most 35 mm below it (so the hand body clears a tall
 object), and at least 11 mm above the table.
 
-The bias is not arbitrary. Measuring the gripper directly — rather than reading
-it off the MJCF — shows the fingertip pad spans TCP−8 mm to TCP+9 mm and the
+The bias is not arbitrary. Measuring the gripper directly, rather than reading
+it off the MJCF, shows the fingertip pad spans TCP−8 mm to TCP+9 mm and the
 lowest collision point sits 8.86 mm below the TCP. Two effects then both favour
 gripping low:
 
@@ -134,8 +134,8 @@ gripping low:
   outward, so a downward slip *loosens* the grip. Below it, the object wedges
   into a widening section and the grip tightens.
 
-A sweep on episodes 3000+ — disjoint from every seed range used for reported
-results — picked 5 mm; success saturates from 5 mm to 12 mm.
+A sweep on episodes 3000+, disjoint from every seed range used for reported
+results, picked 5 mm; success saturates from 5 mm to 12 mm.
 
 Fingertip clearance above the table is 2.1 mm. Flat objects want it as small as
 possible (oracle success on L-shapes rises monotonically from 46% at 5 mm to 71%
@@ -148,7 +148,7 @@ choice and thin non-convex objects remain the hardest case.
 ## 5. Why the grasp sampler is a mixture
 
 Executing only the oracle grasp would give a dataset that is ~90% positive and
-carries no information about *where not to grasp* — which is exactly what a
+carries no information about *where not to grasp*, which is exactly what a
 grasp-quality network has to learn. Episodes are drawn from a mixture:
 
 | mode | weight | what it teaches | n | positive rate |
@@ -158,8 +158,8 @@ grasp-quality network has to learn. Episodes are drawn from a mixture:
 | `edge` | 0.15 | hard cases at the silhouette | 1475 | 28.5% |
 | `off_object` | 0.15 | unambiguous negatives | 1490 | 0.9% |
 
-Measured over the full 10 000-episode run. The result is a balanced dataset —
-**39.1% positive** — rather than the ~90% a pure-oracle collection would give.
+Measured over the full 10 000-episode run. The result is a balanced dataset,
+**39.1% positive**, rather than the ~90% a pure-oracle collection would give.
 The weights are a design choice, not a tuned hyper-parameter, and they are
 recorded in `dataset_meta.json`.
 
@@ -168,8 +168,8 @@ random point in the workspace, which occasionally lands on or beside the object
 by chance. That is correct behaviour, not a leak: the label still comes from
 executing the grasp, so those few episodes are genuine positives.
 
-Per-category positive rates over the same run — box 44.6%, capsule 47.1%,
-cylinder 33.1%, sphere 31.9% — show the sampler is harder on the rounder shapes,
+Per-category positive rates over the same run, box 44.6%, capsule 47.1%,
+cylinder 33.1%, sphere 31.9%, show the sampler is harder on the rounder shapes,
 which is what you would expect and is useful signal rather than noise.
 
 Collection throughput was 6.7 episodes/s with four worker processes on four CPU
@@ -202,8 +202,8 @@ the trained model:
 | mean grasp-angle error, determinate shapes | 46.5° | 45° = random guessing |
 | per-angle quality spread at the chosen pixel | 0.026 | 0 = fully collapsed |
 
-Position is learned well — the predicted pixel lands within 1–2 px of the object
-and predicted quality is ~0 everywhere else — but orientation is not learned at
+Position is learned well, the predicted pixel lands within 1 to 2 px of the object
+and predicted quality is ~0 everywhere else, but orientation is not learned at
 all. The reason is arithmetic: one episode supervises one `(pixel, angle_bin)`
 cell out of `224 × 224 × 12`, so at any object pixel eleven of twelve bins never
 receive a gradient. Predicting the angle-marginal success probability is then a
@@ -231,7 +231,7 @@ overall.
 executes K grasps at the *same point* in the *same settled scene* at orientations
 spread over the half turn, restoring the simulator state between them. Measured
 on the collected set, the outcome differs across angles in roughly half of all
-scenes — and those are precisely the samples that a function of the pixel alone
+scenes, and those are precisely the samples that a function of the pixel alone
 cannot fit, which is what forces the network off the marginal-probability
 solution. It is also cheap, because the settle and the render are shared rather
 than repeated: 14 978 samples took 21 minutes against 25 for 10 000 single-grasp
@@ -239,7 +239,7 @@ episodes.
 
 ### Free negatives
 
-Each episode yields one executed label — 10 000 supervised cells out of
+Each episode yields one executed label: 10 000 supervised cells out of
 `10⁴ × 224 × 224 × 12`. Bare table far from any object is a *certain* failure at
 every angle, so those cells are labelled for free from the height map, without
 running the simulator. "Far" matters: the jaws span up to 68 mm (~15 px), so a
@@ -253,7 +253,7 @@ data loader rather than a plain mask inversion.
 
 Shards are plain `.npy`: `uint8` RGB and `uint16` height in units of 0.1 mm.
 `.npy` is the only common option `numpy` can **memory-map**, which is the whole
-point — a 10k-episode dataset is ~2.5 GB and must not be resident on a 16 GB
+point: a 10k-episode dataset is ~2.5 GB and must not be resident on a 16 GB
 laptop. With `mmap_mode='r'` the training loop touches only the pages for the
 current batch. Compressed archives or HDF5 would force a decode per sample and
 defeat this.
@@ -263,7 +263,7 @@ Height rather than raw depth: the two are interconvertible given the camera pose
 `uint16` at 0.1 mm resolution is far finer than the camera's 2.19 mm ground
 sampling distance at half the size of `float32`.
 
-Memory maps are opened **lazily per worker process** — one created in the parent
+Memory maps are opened **lazily per worker process**, because one created in the parent
 and inherited through `fork` shares a file offset and degrades badly with several
 DataLoader workers.
 

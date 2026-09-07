@@ -11,7 +11,7 @@ Context for an AI assistant (or a returning human) picking this project up. The
 A Franka Panda arm in MuJoCo grasps procedurally generated objects from a single
 overhead RGB-D image. The simulator labels its own data by attempting grasps.
 Three policies are compared: an oracle using ground-truth pose, a depth heuristic
-using no learning, and a CNN. **The CNN currently loses to the heuristic** —
+using no learning, and a CNN. **The CNN currently loses to the heuristic**:
 see [Current state](#current-state) before proposing improvements.
 
 ---
@@ -38,7 +38,7 @@ them in the background and poll, rather than blocking a foreground call.
 
 **MuJoCo derives quantities at compile time and does not refresh them when you
 write the underlying `mjModel` field at runtime.** Three separate bugs of this
-shape were found here. **None raised an error** — each produced a plausible
+shape were found here. **None raised an error**. Each produced a plausible
 simulation that was silently wrong.
 
 | field | what happens if stale |
@@ -62,7 +62,7 @@ Mitigations already in place, do not remove them:
 **`tests/test_randomize.py` is the guard for all of this.** It compares the
 randomised template against a freshly compiled scene field by field, plus contact
 count and a rollout, for all nine categories. If you change the fast path and
-that test fails, the fast path is wrong — not the test.
+that test fails, the fast path is wrong, not the test.
 
 ---
 
@@ -70,7 +70,7 @@ that test fails, the fast path is wrong — not the test.
 
 **MJCF defaults to degrees.** The object catalogue stores euler angles in
 radians. Any generated MJCF needs `<compiler angle="radian"/>`, or a capsule's
-`pi/2` is parsed as 1.57° — wrong orientation *and* wrong inertia, no error.
+`pi/2` is parsed as 1.57°: wrong orientation *and* wrong inertia, no error.
 
 **OSMesa and Triton both load LLVM and the second one segfaults.** On headless
 Linux without a GPU driver, rendering a frame and then importing torch (which
@@ -147,7 +147,7 @@ Ranked by expected value. The first is by far the cheapest.
    positions to 4.4 mm. Try
    `--epochs 30 --batch-size 32 --pretrained` with no `--input-size`.
 2. **More grasps per scene**, and add elongated categories to the training split
-   — half of it (cylinder, sphere) is rotationally symmetric and teaches nothing
+   Half of it (cylinder, sphere) is rotationally symmetric and teaches nothing
    about orientation.
 3. **Clutter.** Several objects per scene. The heuristic is strong here only
    because one isolated object makes the silhouette centroid nearly correct; it
@@ -159,7 +159,7 @@ Ranked by expected value. The first is by far the cheapest.
 
 **Do not** "fix" the honest reporting. The README leads with the CNN losing to
 the heuristic on purpose. If a change improves things, regenerate the numbers
-with `make results` rather than editing tables by hand — `scripts/make_report.py`
+with `make results` rather than editing tables by hand. `scripts/make_report.py`
 writes `docs/results.md` and injects the README table from the run artefacts.
 
 ---
@@ -167,11 +167,11 @@ writes `docs/results.md` and injects the README table from the run artefacts.
 ## House style
 
 * Tests are the contract. Add one for any behaviour whose failure would be
-  silent — that is most of this codebase.
+  silent, and that is most of this codebase.
 * Comments explain *why*, and cite the measurement where one exists. Several
   constants in `grasp.py` and `scene.py` are calibrated values with the sweep
   that produced them recorded next to them; keep that.
 * `ruff check src scripts tests` must pass. Line length 100.
 * Numbers in docs are generated, never typed.
 * `EXPLAIN-THIS-PROJECT.private.*` is gitignored personal notes. **The repo is
-  public** — never commit anything intended to be private.
+  public**, so never commit anything intended to be private.
