@@ -377,14 +377,19 @@ checked numerically on every run.
 
 What it has established so far, on a MuJoCo arm run entirely on CPU:
 
-* **The control reproduces.** The heuristic baseline, re-run unchanged on the
-  same held-out scenes, gives **75.5%** against the **75.3%** reported above, and
-  90.5% seen against 88.3%. Nothing in the environment has moved.
-* **Across 384 to 6,144 labelled grasps, held-out success does not resolve.**
-  Seen-category success rises at 3.5 points per doubling of the training set.
-  Held-out success fits at 0.8 points per doubling with an r-squared of 0.09,
-  which is not distinguishable from flat, and the seen-to-held-out gap widened
-  from 16.5 to 28.0 points rather than closing.
+* **The control is consistent, and the number here was underpowered.** The
+  heuristic baseline, re-run unchanged on the same held-out scenes, gives
+  **79.5%** on 1,500 trials. The **75.3%** reported above rests on 89 held-out
+  trials, whose 95% interval runs from roughly 65% to 83%, so the two agree, but
+  they are not the same number and the more precise one is the bar to beat.
+  Nothing in the environment has moved; the original measurement was simply
+  noisier than its two significant figures suggest.
+* **Across 384 to 6,144 labelled grasps, held-out success is consistent with
+  flat.** At 1,500 evaluation episodes per split it fits at +1.3 points per
+  doubling with a 95% interval of -1.7 to +4.3. The useful half is the upper
+  end: whatever more data buys on unseen shapes over this range, it is at most
+  4.3 points per doubling, and the 31 point distance to the control would take
+  about seven further doublings even at that rate.
 * **Orientation stayed at chance the whole way**, within 1.8 degrees of the 45
   degrees a random guess scores, at every training set size, on both splits.
   Scored on 59 seen and 167 held-out grasps per point.
@@ -395,6 +400,12 @@ What it has established so far, on a MuJoCo arm run entirely on CPU:
   success rate is a minimum of this loss, and more data finds it more reliably.
   That is the mechanism this README already identified, now measured against
   data volume.
+* **The run-to-run noise is larger than the effect.** Retraining at a fixed
+  dataset size moves held-out success by about 2.7 points; doubling the data
+  moves it by 1.3. That decomposition (2.99 points of total scatter, 1.29 of it
+  binomial evaluation noise at n=1500, the rest training variance) is the honest
+  reason the question is hard to settle, and it is a property of this setup
+  rather than of the simulator.
 * **It has not yet reached this project's scale.** Its largest point is 6,144
   samples against roughly 27,000 here, and the 58.4% reported above sits above
   everything on its curve. The curve therefore continues upward past where that
