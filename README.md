@@ -385,8 +385,16 @@ What it has established so far, on a MuJoCo arm run entirely on CPU:
   Held-out success fits at 0.8 points per doubling with an r-squared of 0.09,
   which is not distinguishable from flat, and the seen-to-held-out gap widened
   from 16.5 to 28.0 points rather than closing.
-* **Orientation stayed at chance the whole way**, within 1.1 degrees of the 45
-  degrees a random guess scores, at every training set size.
+* **Orientation stayed at chance the whole way**, within 1.8 degrees of the 45
+  degrees a random guess scores, at every training set size, on both splits.
+  Scored on 59 seen and 167 held-out grasps per point.
+* **The network got less sensitive to orientation as data grew, not more.** The
+  bin spread, the range of predicted quality across the twelve gripper angles at
+  the chosen pixel, fell from 0.41 to 0.05 across the curve, settling near the
+  0.070 measured here at roughly 27,000 samples. Predicting the angle-marginal
+  success rate is a minimum of this loss, and more data finds it more reliably.
+  That is the mechanism this README already identified, now measured against
+  data volume.
 * **It has not yet reached this project's scale.** Its largest point is 6,144
   samples against roughly 27,000 here, and the 58.4% reported above sits above
   everything on its curve. The curve therefore continues upward past where that
