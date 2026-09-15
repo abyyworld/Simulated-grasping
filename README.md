@@ -403,8 +403,8 @@ What it has established so far, on a MuJoCo arm run entirely on CPU:
   architecture.
 * **The network got less sensitive to orientation as data grew, not more.** The
   bin spread, the range of predicted quality across the twelve gripper angles at
-  the chosen pixel, fell from 0.41 to 0.05 across the curve, settling near the
-  0.070 measured here at roughly 27,000 samples. Predicting the angle-marginal
+  the chosen pixel, fell from 0.41 to 0.07 across the curve, settling near the
+  0.070 measured here at roughly 15,000 samples. Predicting the angle-marginal
   success rate is a minimum of this loss, and more data finds it more reliably.
   That is the mechanism this README already identified, now measured against
   data volume.
@@ -418,11 +418,11 @@ What it has established so far, on a MuJoCo arm run entirely on CPU:
   than of the simulator, and it is the sharpest thing the follow-up establishes:
   **a single-seed scaling curve at this scale is mostly measuring its own
   noise.**
-* **It has not yet reached this project's scale.** Its largest point is 12,288
-  samples against roughly 27,000 here, and the 58.4% reported above sits above
-  everything on its curve. The curve therefore continues upward past where that
-  arm reached, and none of this is evidence that more data cannot help. It is
-  evidence that a 16x increase did not help.
+* **It has not quite reached this project's scale.** Its largest point is 12,288
+  samples against roughly 15,000 here, a factor of 1.2, and the 58.4% reported
+  above sits above everything on its curve. The curve therefore continues upward
+  past where that arm reached, and none of this is evidence that more data cannot
+  help. It is evidence that a 32x increase did not help.
 * **The Isaac Lab port has not been executed.** It was written on a machine with
   no NVIDIA GPU. Everything about it that can be checked without one is checked
   and passes; its contact with the simulator is not.
