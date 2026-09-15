@@ -166,6 +166,8 @@ Full tables, regenerated from the run artefacts, in **[docs/results.md](docs/res
 
 *n = 200 trials, identical scenes for every policy.*
 
+*The held-out column is thin. It rests on 89 of those 200 trials, because the run covered every category and was split afterwards, so the heuristic's 75.3% carries a 95% interval of 65.4% to 83.1%, about 18 points wide. [isaac-grasp-scaling](https://github.com/abyyworld/isaac-grasp-scaling) re-ran this same unchanged heuristic on 1,500 held-out trials and measured **79.5%** (95% CI 77.3% to 81.4%). The two agree, but they are not the same number, and the precise one is the bar a learned policy has to clear.*
+
 <!-- RESULTS_TABLE -->
 
 Read the **gap**, not the absolute rates. These are primitive shapes on a clean
@@ -319,7 +321,8 @@ fell below chance and success rose 6 points.
 1. **Orientation does not transfer.** Held-out shapes remain at chance (47.2°).
    The network learned the angle rule for the shapes it saw, not a general
    "grasp across the narrow axis". Held-out success is 58.4% against the
-   heuristic's 75.3%.
+   heuristic's 79.5%, measured on 1,500 trials by the follow-up study; the
+   75.3% in the table above is the same heuristic on 89 trials.
 2. **`closed_empty` still dominates**, 45 of 200 trials against 20 to 25 for the
    other policies.
 3. **The checkpoint is under-trained by design**: 12 epochs at 112×112 on four

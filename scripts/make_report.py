@@ -144,6 +144,14 @@ def training_section(run_dir: Path) -> list[str]:
 
 MARKER = "<!-- RESULTS_TABLE -->"
 
+# The follow-up study re-ran this repository's heuristic baseline, unchanged, on
+# the same held-out scenes at a much larger episode count. Kept here so the
+# headline table carries the precise control next to the underpowered one
+# instead of leaving the correction 200 lines further down the README.
+# Source: github.com/abyyworld/isaac-grasp-scaling, results/scaling/mujoco.
+FOLLOWUP_HEURISTIC = {"rate": 0.795, "n": 1500, "ci95": (0.773, 0.814),
+                      "url": "https://github.com/abyyworld/isaac-grasp-scaling"}
+
 
 def headline_table(results: Path) -> list[str]:
     """The compact table injected into the README between RESULTS_TABLE markers."""
@@ -164,9 +172,32 @@ def headline_table(results: Path) -> list[str]:
     if not rows:
         return []
     n = load(results / "baseline" / "oracle.json")["n"]
+    caption = ["", f"*n = {n} trials, identical scenes for every policy.*"]
+
+    # The held-out column is the one every conclusion here rests on, and it is
+    # the thin one: the run covered all categories and was split afterwards, so
+    # it carries a fraction of those trials. Saying so under the table is the
+    # difference between a number and a number you can act on.
+    heuristic = load(results / "baseline" / "heuristic.json")
+    split = (heuristic or {}).get("by_split", {}).get("unseen")
+    if split:
+        lo, hi = split["ci95"]
+        f = FOLLOWUP_HEURISTIC
+        caption += ["", (
+            f"*The held-out column is thin. It rests on {split['n']} of those {n} "
+            f"trials, because the run covered every category and was split "
+            f"afterwards, so the heuristic's {_pct(split['rate'])} carries a 95% "
+            f"interval of {_pct(lo)} to {_pct(hi)}, about "
+            f"{100 * (hi - lo):.0f} points wide. "
+            f"[isaac-grasp-scaling]({f['url']}) re-ran this same unchanged "
+            f"heuristic on {f['n']:,} held-out trials and measured "
+            f"**{_pct(f['rate'])}** (95% CI {_pct(f['ci95'][0])} to "
+            f"{_pct(f['ci95'][1])}). The two agree, but they are not the same "
+            f"number, and the precise one is the bar a learned policy has to "
+            f"clear.*")]
+
     return (["| policy | seen categories | held-out categories | drop | |",
-             "|---|---|---|---|---|"] + rows +
-            ["", f"*n = {n} trials, identical scenes for every policy.*"])
+             "|---|---|---|---|---|"] + rows + caption)
 
 
 def update_readme(readme: Path, table: list[str]) -> bool:
