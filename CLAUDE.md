@@ -113,7 +113,7 @@ object's top edge and squirts it sideways.
 
 ## Current state
 
-Reference numbers, 200 held-out trials, identical scenes ([docs/results.md](docs/results.md)):
+Reference numbers, 200 trials (111 seen / 89 held-out), identical scenes ([docs/results.md](docs/results.md)):
 
 | policy | overall | seen | held-out |
 |---|---|---|---|
@@ -128,8 +128,11 @@ Diagnosed and partly fixed: grasp *position* is learned well, grasp *angle* was
 not learned at all. Each episode supervises one of twelve angle bins at one
 pixel, so predicting the angle-marginal success rate is a loss minimum.
 Collecting several grasps per scene at the same point (`--angles-per-scene`)
-cut seen-category angle error from 55° to 35° and raised success from 66.5% to
-72.5%. It does **not** transfer: held-out shapes remain at chance.
+cut seen-category angle error from 55° to 35°, which is in
+`results/angle_ablation.json`, and raised success from 66.5% to 72.5%. Only the
+angle half of that is committed: both CNN baseline artefacts are the 72.5% run,
+so the 66.5% cannot be rechecked without regenerating it. It does **not**
+transfer: held-out shapes remain at chance.
 
 Three checkpoints are kept so the comparison stays inspectable:
 `runs/grasp_cnn_norot` (one grasp/scene), `runs/grasp_cnn` (plus rotation

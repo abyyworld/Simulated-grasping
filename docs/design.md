@@ -354,7 +354,7 @@ Two process notes worth more than the result:
 * **Open-loop execution.** The controller does not react to contact during the
   grasp, which is what makes thin non-convex objects the failure mode they are.
 * **The learned policy is the weakest part of this project.** It loses to the
-  depth heuristic, 66.5% to 82.5%, for the reasons in §6 and in the README's
+  depth heuristic, 72.5% to 82.5%, for the reasons in §6 and in the README's
   failure analysis. The simulation, the data pipeline, the evaluation harness and
   the baselines are the parts that are solid.
 * **RGB is often close to blown out** under the sampled lighting, so the colour

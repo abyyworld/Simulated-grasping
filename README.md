@@ -19,7 +19,8 @@ that share no topology with them (ellipsoid, L, T, mug, dumbbell).
 > **Read the results before the pitch.** In the reference run below the learned
 > policy **loses to a hand-written depth heuristic**, 72.5% against 82.5%. That is
 > the honest state of it. The causes are measured rather than guessed, one of them
-> was diagnosed and then fixed for a +6-point gain, and the whole chain is written
+> was diagnosed and then fixed, cutting seen-category angle error from 55.2° to
+> 35.2°, and the whole chain is written
 > up in [Failure analysis](#failure-analysis). The simulation, the data pipeline
 > and the evaluation are solid; the model is the weak part, and the reference
 > checkpoint was trained at half resolution on a laptop CPU because that is the
@@ -307,14 +308,21 @@ angle-*marginal* success rate is a loss minimum. The network found it.
 
 | training data | angle error (seen) | grasp success |
 |---|---|---|
-| one grasp per scene | 55.2° | 66.5% |
+| one grasp per scene | 55.2° | 66.5%† |
 | one grasp per scene + rotation augmentation | 48.6° | not measured |
 | **three grasps per scene, same point, different angles** | **35.2°** | **72.5%** |
+
+† The angle column comes from `results/angle_ablation.json`. The 66.5% does
+not: the two committed CNN evaluations, `results/baseline/cnn.json` and
+`results/baseline_multi/cnn.json`, are byte-identical at 145/200, so the
+single-grasp run was never committed separately and the 6-point success gain
+cannot be rechecked from what ships. The angle result can: 55.2° to 35.2° is
+in the artefact.
 
 Rotation augmentation helped a little. What actually worked was making the
 *data* contrastive: executing several grasps at the same point at different
 orientations, so no function of the pixel alone can fit the labels. Angle error
-fell below chance and success rose 6 points.
+fell below chance, and success rose about 6 points on a run that was not kept.
 
 **What still holds it back:**
 
